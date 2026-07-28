@@ -9,12 +9,7 @@ import mysql.connector
 import random
 from datetime import datetime, timedelta
 
-DB_CONFIG = {
-    "host": "localhost",
-    "port": 3306,
-    "user": "root",
-    "password": "921129YYmnqnb",
-}
+from config import DB_CONFIG, DB_TOURISM
 
 # ============================================================
 # 1. 景区种子数据（名称、分类、坐标都是真实的咸丰县景点）
@@ -107,9 +102,9 @@ EVENT_EXTRA = ["土家摆手舞", "苗族银饰", "硒茶", "吊脚楼", "风雨
 
 def setup_tables(cursor):
     """创建景区、活动、预约三张表"""
-    cursor.execute("CREATE DATABASE IF NOT EXISTS tourism_db "
+    cursor.execute(f"CREATE DATABASE IF NOT EXISTS {DB_TOURISM} "
                    "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
-    cursor.execute("USE tourism_db")
+    cursor.execute(f"USE {DB_TOURISM}")
 
     # 先删子表再删父表，避免外键约束报错
     cursor.execute("DROP TABLE IF EXISTS booking")
@@ -313,9 +308,9 @@ if __name__ == "__main__":
 
     cursor.close()
     conn.close()
-    print("\n数据库已写入完成！数据库名: tourism_db\n")
+    print(f"\n数据库已写入完成！数据库名: {DB_TOURISM}\n")
     print("师傅可以这样查数据：")
-    print("  USE tourism_db;")
+    print(f"  USE {DB_TOURISM};")
     print("  SELECT * FROM scenic_spot;       -- 看景区")
     print("  SELECT * FROM activity;          -- 看活动")
     print("  SELECT * FROM booking;           -- 看预约")
