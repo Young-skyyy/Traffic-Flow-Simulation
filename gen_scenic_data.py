@@ -2,7 +2,6 @@
 """
 景区测试数据生成器
 用于文旅小程序后端开发——批量生成景区、活动、用户预约数据并写入 MySQL
-拿这个去找师傅："测接口的数据我已经帮你们造好了，库里直接查"
 """
 
 import mysql.connector
@@ -257,7 +256,7 @@ def generate_booking_data(cursor):
 
 
 def show_summary(cursor):
-    """打印数据概览，拿去给师傅看"""
+    """打印数据概览"""
     print("\n" + "=" * 60)
     print("                    数据概览")
     print("=" * 60)
@@ -308,9 +307,10 @@ if __name__ == "__main__":
 
     cursor.close()
     conn.close()
-    print(f"\n数据库已写入完成！数据库名: {DB_TOURISM}\n")
-    print("师傅可以这样查数据：")
-    print(f"  USE {DB_TOURISM};")
-    print("  SELECT * FROM scenic_spot;       -- 看景区")
-    print("  SELECT * FROM activity;          -- 看活动")
-    print("  SELECT * FROM booking;           -- 看预约")
+    print(f"\n数据已写入数据库: {DB_TOURISM}")
+    print(f"  景区表 scenic_spot: {cursor.rowcount} 条")
+    print(f"快速查询:")
+    print(f"  mysql> USE {DB_TOURISM};")
+    print(f"  mysql> SELECT * FROM scenic_spot;")
+    print(f"  mysql> SELECT * FROM activity;")
+    print(f"  mysql> SELECT * FROM booking;")
