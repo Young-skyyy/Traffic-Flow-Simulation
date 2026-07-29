@@ -1,6 +1,6 @@
 # Vehicle Dynamics & CAN Bus Simulation Toolkit
 
-A Python-based simulation toolkit for vehicle dynamics modeling, fuel consumption analysis, CAN bus simulation, and traffic flow analysis. Built for automotive testing and HiL validation workflows.
+A Python-based simulation toolkit for vehicle dynamics modeling, engine fuel consumption analysis, and CAN bus simulation. Built for automotive testing and HiL validation workflows.
 
 ## Project Structure
 
@@ -12,8 +12,6 @@ A Python-based simulation toolkit for vehicle dynamics modeling, fuel consumptio
 ├── plotting.py                 # BSFC heatmap (cubic spline + contourf)
 ├── vehicle_dynamics.py         # Entry point: imports & __main__ runner
 ├── can_demo.py                 # CAN bus simulation, DBC generation, error injection
-├── traffic_sim.py              # Traffic signal, multi-lane queue, accident sim
-├── traffic_flow.py             # Road capacity & traffic flow fundamentals
 ├── simulated_ecu.dbc           # Auto-generated DBC file (5 ECUs)
 ├── can_log.asc                 # ASC trace log with timestamps
 ├── bsfc_map.png                # BSFC heatmap visualization
@@ -32,8 +30,6 @@ A Python-based simulation toolkit for vehicle dynamics modeling, fuel consumptio
 | WLTC Cycle | `wltc.py` | Class 3 driving cycle (1800s), transient fuel simulation |
 | Visualization | `plotting.py` | BSFC heatmap with cubic spline smoothing |
 | CAN Bus | `can_demo.py` | 5-ECU message generation, DBC/ASC export, bus load, error injection |
-| Traffic Simulation | `traffic_sim.py` | Signal control, multi-lane queuing, accident impact |
-| Traffic Flow | `traffic_flow.py` | Speed-density-flow relations, capacity calculation |
 
 ## Features
 
@@ -51,11 +47,6 @@ A Python-based simulation toolkit for vehicle dynamics modeling, fuel consumptio
 - **Bus load monitoring**: real-time load percentage (typically < 35% at 500 kbps)
 - **Error frame injection**: configurable error rate for robustness testing
 - **DTC fault scanning**: diagnostic trouble code enumeration
-
-### Traffic Flow
-- Single/dual-lane queue analysis under signal control
-- Accident scenario: lane closure impact on bottleneck capacity
-- Protected left-turn phase simulation
 
 ## Quick Start
 
@@ -79,12 +70,6 @@ python vehicle_dynamics.py
 
 # CAN bus simulation: ECU messages, DBC generation, ASC log
 python can_demo.py
-
-# Traffic signal & queue analysis
-python traffic_sim.py
-
-# Traffic flow fundamentals
-python traffic_flow.py
 ```
 
 ### Sample Outputs
