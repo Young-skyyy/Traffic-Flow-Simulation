@@ -16,6 +16,20 @@ from vehicle import (
     calc_braking_distance,
     show_braking_table,
     car_following_simulation,
+    calc_grade_power,
+    calc_power_to_weight,
+    calc_aero_drag_power,
+    show_power_breakdown,
+    rolling_coeff_dynamic,
+)
+from lateral_dynamics import (
+    calc_understeer_gradient,
+    calc_steady_state_cornering,
+    calc_characteristic_speed,
+    calc_critical_speed,
+    show_lateral_analysis,
+    show_steady_cornering_table,
+    show_step_steer_response,
 )
 from bsfc import (
     calc_fuel_consumption,
@@ -28,6 +42,7 @@ from wltc import (
     simulate_wltc,
 )
 from plotting import plot_bsfc_map
+from plot_dashboard import plot_dashboard
 
 
 # ============================================================
@@ -50,8 +65,8 @@ if __name__ == "__main__":
     # 练习 3：稳态油耗对比（BSFC 万有特性模型）
     show_fuel_table()
 
-    # 练习 4：BSFC 万有特性热力图
-    plot_bsfc_map()
+    # 练习 4：面试仪表盘 —— BSFC 万有特性 + 横向动力学 四合一
+    plot_dashboard(car_sedan)
 
     # 练习 4b：WLTC 标准循环瞬态仿真（耗时较长，注释掉按需运行）
     # show_wltc_summary()
@@ -59,5 +74,15 @@ if __name__ == "__main__":
 
     # 练习 5：跟车模型（交通流理论核心）
     car_following_simulation()
+
+    # 练习 6：功率分解 —— 爬坡功率、比功率、风阻功率
+    show_power_breakdown(car_sedan, speed_kmh=100, grade_percent=5)
+    show_power_breakdown(car_suv, speed_kmh=100, grade_percent=5)
+    show_power_breakdown(car_truck, speed_kmh=80, grade_percent=3)
+
+    # 练习 7：横向动力学 —— 自行车模型、不足/过度转向
+    show_lateral_analysis(car_sedan)
+    show_steady_cornering_table(car_sedan)
+    show_step_steer_response(car_sedan, vx_kmh=80, steer_deg=3)
 
     print("\n提示: 改参数试试 — 把路面摩擦系数从 0.7 改成 0.3（雨天）看制动距离变化")

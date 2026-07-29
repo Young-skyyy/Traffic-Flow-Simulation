@@ -8,6 +8,19 @@ from vehicle import (
     calc_resistance,
     calc_braking_distance,
     calc_acceleration,
+    calc_grade_power,
+    calc_power_to_weight,
+    calc_aero_drag_power,
+    rolling_coeff_dynamic,
+)
+from lateral_dynamics import (
+    calc_slip_angles,
+    calc_cornering_forces,
+    calc_understeer_gradient,
+    calc_characteristic_speed,
+    calc_critical_speed,
+    calc_steady_state_cornering,
+    simulate_step_steer,
 )
 from bsfc import (
     _interpolate_bsfc,
@@ -108,6 +121,45 @@ class TestCalcResistance:
         r_sedan = calc_resistance(sedan, 0)
         r_truck = calc_resistance(truck, 0)
         assert r_truck > r_sedan
+
+
+class TestDynamicRollingResistance:
+    """rolling_coeff_dynamic + calc_resistance(dynamic_rr=True)"""
+
+    def test_zero_speed_returns_f0(self):
+        mu = rolling_coeff_dynamic(0)
+        assert mu == pytest.approx(0.010, rel=1e-6)
+
+    def test_100kmh_returns_sum(self):
+        """v=100 → v/100=1 → f0+f1+f4"""
+        v_ms = 100 / 3.6
+        mu = rolling_coeff_dynamic(v_ms)
+        assert mu == pytest.approx(0.010 + 0.005 + 0.002, rel=1e-6)
+
+    def test_increases_with_speed(self):
+        mu_low = rolling_coeff_dynamic(30 / 3.6)
+        mu_high = rolling_coeff_dynamic(120 / 3.6)
+        assert mu_high > mu_low
+
+    def test_fourth_order_dominates_at_high_speed(self):
+        """120km/h 时四次项贡献应显著大于 60km/h"""
+        mu_60 = rolling_coeff_dynamic(60 / 3.6)
+        mu_120 = rolling_coeff_dynamic(120 / 3.6)
+        # 从 60→120，增量主要来自四次项
+        assert mu_120 - mu_60 > 0.003
+
+    def test_dynamic_rr_lower_than_constant_at_low_speed(self, sedan):
+        """常量 μ=0.015，动态在低速时应更低"""
+        # 有显式参数的车，不是 sedan fixture
+        r_const = calc_resistance(sedan, 10)
+        r_dyn = calc_resistance(sedan, 10, dynamic_rr=True)
+        assert r_dyn < r_const
+
+    def test_dynamic_rr_switch_defaults_to_false(self, sedan):
+        """不传第三个参数时默认用常量"""
+        r1 = calc_resistance(sedan, 20)
+        r2 = calc_resistance(sedan, 20, dynamic_rr=False)
+        assert r1 == r2
 
 
 # ============================================================
@@ -286,6 +338,81 @@ class TestAcceleration:
 
 
 # ============================================================
+# 爬坡功率、比功率、风阻功率
+# ============================================================
+
+class TestGradePower:
+    """calc_grade_power — 爬坡功率"""
+
+    def test_zero_speed_zero_power(self, sedan):
+        assert calc_grade_power(sedan, 0, 5) == 0
+
+    def test_zero_grade_zero_power(self, sedan):
+        assert calc_grade_power(sedan, 20, 0) == 0
+
+    def test_steeper_grade_more_power(self, sedan):
+        p5 = calc_grade_power(sedan, 20, 5)
+        p10 = calc_grade_power(sedan, 20, 10)
+        assert p10 > p5
+
+    def test_truck_needs_more_grade_power(self, sedan, truck):
+        p_sedan = calc_grade_power(sedan, 15, 5)
+        p_truck = calc_grade_power(truck, 15, 5)
+        assert p_truck > p_sedan
+
+    def test_returns_watts(self, sedan):
+        p = calc_grade_power(sedan, 20, 5)
+        assert p > 0
+        assert isinstance(p, float)
+
+
+class TestPowerToWeight:
+    """calc_power_to_weight — 比功率"""
+
+    def test_sedan_reasonable(self, sedan):
+        wpk, kpt = calc_power_to_weight(sedan)
+        assert 50 < wpk < 100
+        assert wpk == pytest.approx(100_000 / 1500, rel=1e-6)
+
+    def test_returns_tuple(self, sedan):
+        result = calc_power_to_weight(sedan)
+        assert len(result) == 2
+
+    def test_truck_lower_than_sedan(self, sedan, truck):
+        wpk_s, _ = calc_power_to_weight(sedan)
+        wpk_t, _ = calc_power_to_weight(truck)
+        assert wpk_t < wpk_s
+
+    def test_kw_per_ton_equals_w_per_kg(self, sedan):
+        wpk, kpt = calc_power_to_weight(sedan)
+        assert wpk == pytest.approx(kpt, rel=1e-6)
+
+
+class TestAeroDragPower:
+    """calc_aero_drag_power — 风阻功率"""
+
+    def test_zero_speed_zero_power(self, sedan):
+        assert calc_aero_drag_power(sedan, 0) == 0
+
+    def test_cubic_relationship(self, sedan):
+        """风阻功率 ∝ v³"""
+        p1 = calc_aero_drag_power(sedan, 10)
+        p2 = calc_aero_drag_power(sedan, 20)
+        # v翻倍 → 功率应为 8 倍
+        assert p2 == pytest.approx(p1 * 8, rel=1e-6)
+
+    def test_higher_cd_more_power(self, sedan, truck):
+        p_sedan = calc_aero_drag_power(sedan, 30)
+        p_truck = calc_aero_drag_power(truck, 30)
+        assert p_truck > p_sedan
+
+    def test_formula_correct(self, sedan):
+        v = 25  # m/s = 90 km/h
+        expected = 0.5 * 1.225 * sedan.cd * sedan.area * v ** 3
+        assert calc_aero_drag_power(sedan, v) == pytest.approx(expected, rel=1e-6)
+
+
+# ============================================================
 # 真实车型参数验证 — 用已知油耗反推模型合理性
 # ============================================================
 
@@ -371,3 +498,166 @@ class TestWLTCDataQuality:
         profile = get_wltc_profile()
         idle_count = sum(1 for v in profile if v == 0)
         assert idle_count > 50, f"仅 {idle_count} 个怠速点，停车次数不足"
+
+
+# ============================================================
+# 横向动力学 — 自行车模型测试
+# ============================================================
+
+@pytest.fixture
+def lat_sedan():
+    """带完整横向参数的轿车"""
+    return Vehicle("LatSedan", 1500, 100, drag_coeff=0.28,
+                   wheelbase_m=2.65, cg_to_front_m=1.2,
+                   cornering_stiffness_f=80000, cornering_stiffness_r=70000,
+                   max_torque_nm=180, gear_ratios=[3.55, 2.11, 1.42, 1.00, 0.78],
+                   final_drive=4.06, wheel_radius_m=0.32)
+
+
+@pytest.fixture
+def lat_oversteer():
+    """过度转向车：后轴侧偏刚度偏小"""
+    return Vehicle("Oversteer", 1500, 100, drag_coeff=0.28,
+                   wheelbase_m=2.65, cg_to_front_m=1.2,
+                   cornering_stiffness_f=80000, cornering_stiffness_r=40000,
+                   max_torque_nm=180, gear_ratios=[3.55, 2.11, 1.42, 1.00, 0.78],
+                   final_drive=4.06, wheel_radius_m=0.32)
+
+
+class TestVehicleLateralParams:
+    """Vehicle 横向参数默认值"""
+
+    def test_wheelbase_default(self, sedan):
+        assert sedan.wheelbase > 0
+
+    def test_cg_split_default(self, sedan):
+        assert sedan.cg_to_front > 0
+        assert sedan.cg_to_rear > 0
+        assert sedan.wheelbase == pytest.approx(sedan.cg_to_front + sedan.cg_to_rear, rel=1e-6)
+
+    def test_yaw_inertia_default(self, sedan):
+        expected = sedan.mass * sedan.cg_to_front * sedan.cg_to_rear
+        assert sedan.yaw_inertia == pytest.approx(expected, rel=1e-6)
+
+    def test_cornering_stiffness_default(self, sedan):
+        assert sedan.cornering_stiffness_f > 0
+        assert sedan.cornering_stiffness_r > 0
+
+
+class TestSlipAngles:
+    """calc_slip_angles"""
+
+    def test_zero_steer_zero_vy_gives_zero(self, lat_sedan):
+        af, ar = calc_slip_angles(lat_sedan, vx_ms=20, vy_ms=0, yaw_rate=0, steer_angle_rad=0)
+        assert af == 0
+        assert ar == 0
+
+    def test_steer_gives_negative_front_slip(self, lat_sedan):
+        """转向时，初始侧偏角为负（轮胎运动方向落后于指向）"""
+        af, ar = calc_slip_angles(lat_sedan, vx_ms=20, vy_ms=0, yaw_rate=0, steer_angle_rad=0.05)
+        assert af < 0
+
+    def test_positive_yaw_gives_front_less_negative(self, lat_sedan):
+        """正横摆让前轮侧偏角负得更少"""
+        af, ar = calc_slip_angles(lat_sedan, vx_ms=20, vy_ms=0, yaw_rate=0.1, steer_angle_rad=0.05)
+        assert af < 0
+        assert ar < 0
+
+
+class TestUndersteerGradient:
+    """calc_understeer_gradient"""
+
+    def test_sedan_is_understeer(self, lat_sedan):
+        _, kus_deg = calc_understeer_gradient(lat_sedan)
+        assert kus_deg > 0, f"轿车应为不足转向，实际 {kus_deg:.3f} deg/g"
+
+    def test_cg_forward_gives_more_understeer(self, lat_sedan):
+        """质心前移 → 前轴载荷增加 → 不足转向更严重"""
+        front_heavy = Vehicle("Front", 1500, 100, drag_coeff=0.28,
+                              wheelbase_m=2.65, cg_to_front_m=1.0,
+                              cornering_stiffness_f=80000, cornering_stiffness_r=70000)
+        _, kus_f = calc_understeer_gradient(front_heavy)
+        _, kus_s = calc_understeer_gradient(lat_sedan)
+        # cg_to_front=1.0 < 1.2 → 前轴更重 → Kus 更大
+        assert kus_f > kus_s
+
+    def test_oversteer_car_negative_kus(self, lat_oversteer):
+        _, kus_deg = calc_understeer_gradient(lat_oversteer)
+        assert kus_deg < 0, f"过度转向车 Kus 应为负，实际 {kus_deg:.3f}"
+
+
+class TestCharacteristicSpeed:
+    """calc_characteristic_speed"""
+
+    def test_sedan_has_finite_char_speed(self, lat_sedan):
+        v_char = calc_characteristic_speed(lat_sedan)
+        assert 50 < v_char < 300, f"特征车速应在合理范围，实际 {v_char:.0f}"
+
+    def test_oversteer_has_infinite_char_speed(self, lat_oversteer):
+        assert calc_characteristic_speed(lat_oversteer) == float("inf")
+
+
+class TestCriticalSpeed:
+    """calc_critical_speed"""
+
+    def test_sedan_no_critical_speed(self, lat_sedan):
+        assert calc_critical_speed(lat_sedan) == float("inf")
+
+    def test_oversteer_has_finite_critical_speed(self, lat_oversteer):
+        v_crit = calc_critical_speed(lat_oversteer)
+        assert 0 < v_crit < 300, f"临界车速应在合理范围，实际 {v_crit:.0f}"
+
+
+class TestSteadyStateCornering:
+    """calc_steady_state_cornering"""
+
+    def test_returns_dict_with_keys(self, lat_sedan):
+        result = calc_steady_state_cornering(lat_sedan, 60, 3)
+        for key in ["yaw_rate_deg_s", "lateral_acc_g", "turn_radius_m", "kus_deg_per_g"]:
+            assert key in result
+
+    def test_understeer_larger_radius_at_higher_speed(self, lat_sedan):
+        r30 = calc_steady_state_cornering(lat_sedan, 30, 3)["turn_radius_m"]
+        r90 = calc_steady_state_cornering(lat_sedan, 90, 3)["turn_radius_m"]
+        # 不足转向 → 高速时转弯半径偏大
+        assert r90 > r30
+
+    def test_neutral_steer_constant_radius(self):
+        """中性转向：转弯半径 ≈ L/δ，与车速无关"""
+        neutral = Vehicle("Neutral", 1500, 100, drag_coeff=0.28,
+                          wheelbase_m=2.65, cg_to_front_m=1.2,
+                          cornering_stiffness_f=96600, cornering_stiffness_r=80000,
+                          max_torque_nm=180)
+        kus_rad, kus_deg = calc_understeer_gradient(neutral)
+        # 确认 Kus ≈ 0（中性转向）
+        assert abs(kus_deg) < 0.1, f"应为中性转向，实际 Kus={kus_deg:.4f} deg/g"
+        r30 = calc_steady_state_cornering(neutral, 30, 3)["turn_radius_m"]
+        r60 = calc_steady_state_cornering(neutral, 60, 3)["turn_radius_m"]
+        # 中性转向半径变化很小
+        assert abs(r60 - r30) / r30 < 0.10
+
+
+class TestStepSteerSimulation:
+    """simulate_step_steer"""
+
+    def test_returns_non_empty_history(self, lat_sedan):
+        history = simulate_step_steer(lat_sedan, 60, 3, duration_s=2)
+        assert len(history) > 0
+
+    def test_history_elements_are_five_tuples(self, lat_sedan):
+        history = simulate_step_steer(lat_sedan, 60, 3, duration_s=1)
+        assert all(len(h) == 5 for h in history)
+
+    def test_converges_to_steady_state(self, lat_sedan):
+        """仿真终值应收敛到稳态理论值"""
+        result = calc_steady_state_cornering(lat_sedan, 60, 3)
+        history = simulate_step_steer(lat_sedan, 60, 3, duration_s=5)
+        _, _, _, final_r_deg, final_ay_g = history[-1]
+        # 应在 5% 内收敛
+        assert final_r_deg == pytest.approx(result["yaw_rate_deg_s"], rel=0.05)
+        assert final_ay_g == pytest.approx(result["lateral_acc_g"], rel=0.05)
+
+    def test_yaw_rate_starts_at_zero(self, lat_sedan):
+        history = simulate_step_steer(lat_sedan, 60, 3, duration_s=1)
+        _, _, r0, _, _ = history[0]
+        assert r0 == 0
