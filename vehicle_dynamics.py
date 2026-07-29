@@ -364,16 +364,14 @@ def plot_bsfc_map(save_path=None):
     rpm = np.array(_BSFC_RPM_GRID)
     load = np.array(_BSFC_LOAD_GRID) * 100  # 转为百分比
     bsfc_data = np.array(_BSFC_GASOLINE)
-    R, L = np.meshgrid(rpm, load)
 
-    # 加密网格到 200×150 使等高线平滑
+    # 三次样条插值到 200×150 网格，使等高线光滑无棱角
+    from scipy.interpolate import RectBivariateSpline
+    spline = RectBivariateSpline(load, rpm, bsfc_data, kx=3, ky=3)
     rpm_fine = np.linspace(rpm[0], rpm[-1], 200)
     load_fine = np.linspace(load[0], load[-1], 150)
     R_fine, L_fine = np.meshgrid(rpm_fine, load_fine)
-    bsfc_fine = np.zeros_like(R_fine)
-    for i in range(len(load_fine)):
-        for j in range(len(rpm_fine)):
-            bsfc_fine[i, j] = _interpolate_bsfc(rpm_fine[j], load_fine[i] / 100.0)
+    bsfc_fine = spline(load_fine, rpm_fine)
 
     fig, ax = plt.subplots(figsize=(10, 7))
 
