@@ -1,16 +1,20 @@
 # -*- coding: utf-8 -*-
-"""Pytest unit tests for vehicle_dynamics.py"""
+"""Pytest unit tests for vehicle dynamics module"""
 
 import pytest
 import math
-from vehicle_dynamics import (
+from vehicle import (
     Vehicle,
     calc_resistance,
     calc_braking_distance,
+)
+from bsfc import (
     _interpolate_bsfc,
     _calc_l100_raw,
     _BSFC_RPM_GRID,
     _BSFC_LOAD_GRID,
+)
+from wltc import (
     get_wltc_profile,
     _WLTC_DURATION,
 )

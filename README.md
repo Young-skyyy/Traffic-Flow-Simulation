@@ -6,27 +6,34 @@ A Python-based simulation toolkit for vehicle dynamics modeling, fuel consumptio
 
 ```
 .
-├── vehicle_dynamics.py    # Core: vehicle physics, BSFC fuel model, WLTC cycle
-├── can_demo.py            # CAN bus simulation, DBC generation, error injection
-├── traffic_sim.py         # Traffic signal, multi-lane queue, accident simulation
-├── traffic_flow.py        # Road capacity & traffic flow fundamentals
-├── simulated_ecu.dbc           # Auto-generated DBC file (5 ECUs, Vector CANoe compatible)
+├── vehicle.py                  # Vehicle class, resistance, acceleration, braking
+├── bsfc.py                     # BSFC map data, bilinear interpolation, fuel calc
+├── wltc.py                     # WLTC Class 3 cycle, transient simulation
+├── plotting.py                 # BSFC heatmap (cubic spline + contourf)
+├── vehicle_dynamics.py         # Entry point: imports & __main__ runner
+├── can_demo.py                 # CAN bus simulation, DBC generation, error injection
+├── traffic_sim.py              # Traffic signal, multi-lane queue, accident sim
+├── traffic_flow.py             # Road capacity & traffic flow fundamentals
+├── simulated_ecu.dbc           # Auto-generated DBC file (5 ECUs)
 ├── can_log.asc                 # ASC trace log with timestamps
 ├── bsfc_map.png                # BSFC heatmap visualization
-├── test_vehicle_dynamics.py    # Pytest unit tests for vehicle dynamics module
-├── test_can_demo.py            # Pytest unit tests for CAN bus module
+├── test_vehicle_dynamics.py    # Pytest unit tests for vehicle dynamics
+├── test_can_demo.py            # Pytest unit tests for CAN bus
 ├── requirements.txt            # Python dependencies
 └── README.md
 ```
 
 ## Modules
 
-| Module | File | Description |
-|--------|------|-------------|
-| Vehicle Dynamics | `vehicle_dynamics.py` | Acceleration, braking distance, BSFC-based fuel consumption, WLTC Class 3 transient cycle |
-| CAN Bus Simulation | `can_demo.py` | 5-ECU message generation, DBC/ASC export, bus load analysis, error frame injection |
-| Traffic Simulation | `traffic_sim.py` | Signal control, multi-lane queuing, accident impact on capacity |
-| Traffic Flow | `traffic_flow.py` | Speed-density-flow relations, single-lane capacity calculation |
+| Module | Files | Description |
+|--------|-------|-------------|
+| Vehicle Physics | `vehicle.py` | Vehicle class, resistance, acceleration, braking distance |
+| Fuel Model | `bsfc.py` | BSFC map (180 data points), bilinear interpolation, L/100km |
+| WLTC Cycle | `wltc.py` | Class 3 driving cycle (1800s), transient fuel simulation |
+| Visualization | `plotting.py` | BSFC heatmap with cubic spline smoothing |
+| CAN Bus | `can_demo.py` | 5-ECU message generation, DBC/ASC export, bus load, error injection |
+| Traffic Simulation | `traffic_sim.py` | Signal control, multi-lane queuing, accident impact |
+| Traffic Flow | `traffic_flow.py` | Speed-density-flow relations, capacity calculation |
 
 ## Features
 
