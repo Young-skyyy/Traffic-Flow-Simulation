@@ -8,9 +8,8 @@
   (转速, 扭矩) → 查 BSFC map → 瞬时燃油消耗率(g/kWh)
   → 油耗(L/100km) = BSFC × 功率 × 100 / (油密度 × 车速)
 
-BSFC (Brake Specific Fuel Consumption) 是发动机效率的等高线图：
-  最优区 (~240 g/kWh)：2000-3000 rpm, 70-85% 负荷
-  最差区 (~500+ g/kWh)：怠速低负荷 或 红线高转
+BSFC (Brake Specific Fuel Consumption) 发动机效率等高线图：
+  g/kWh 越低效率越高，经济区 ~240 g/kWh/2000-3000 rpm
 """
 
 import math

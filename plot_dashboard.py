@@ -189,7 +189,7 @@ def _draw_turn_radius_panel(ax, vehicle):
                 xy=(120, r_neutral + 1.5), fontsize=8, color="#d7191c", fontweight="bold")
 
     # 标注不足转向趋势
-    ax.annotate("不足转向 → 高速时\n转弯半径显著增大",
+    ax.annotate("不足转向特征",
                 xy=(100, radii[20]), fontsize=9,
                 color="#1b7837", fontweight="bold",
                 bbox=dict(boxstyle="round,pad=0.3", facecolor="lightyellow", alpha=0.8))

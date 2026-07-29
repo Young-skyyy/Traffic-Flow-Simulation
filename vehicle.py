@@ -97,7 +97,7 @@ def rolling_coeff_dynamic(speed_ms):
     f₀：静态变形阻力（车速=0 时也存在的损耗）
     f₁：一次项，轮胎迟滞损耗随转速线性增长
     f₄：四次项，高速驻波效应，100km/h 以上才抬头
-    系数来源：乘用车 coast-down 测试典型值（EPA 公开数据）
+    系数为乘用车 coast-down 测试典型值
     """
     v = speed_ms * 3.6            # m/s → km/h，SAE 标准用 100km/h 归一化
     f0 = 0.010                    # 截距项
@@ -166,7 +166,7 @@ def calc_braking_distance(speed_kmh, friction_coeff=0.7, reaction_time=1.5):
     """计算制动总距离 = 反应距离 + 制动距离"""
     speed_ms = speed_kmh / 3.6
 
-    # 反应距离 = 速度 × 反应时间（人看到危险到踩刹车）
+    # 反应距离 = 速度 × 反应时间
     reaction_dist = speed_ms * reaction_time
 
     # 制动距离 = v² / (2 × μ × g)（物理公式，μ=路面摩擦系数）
@@ -189,12 +189,8 @@ def calc_grade_power(vehicle, speed_ms, grade_percent=5):
 
 def calc_power_to_weight(vehicle):
     """计算比功率（W/kg 和 kW/ton）
-    
+
     比功率 = 发动机最大功率 / 整车质量
-    是衡量车辆动力性的重要指标：
-    - 轿车: 60-100 W/kg
-    - 跑车: 150+ W/kg
-    - 卡车: 10-30 W/kg
     """
     watt_per_kg = vehicle.power / vehicle.mass
     kw_per_ton = watt_per_kg  # W/kg == kW/ton（因为 1 kW / 1000 kg = 1 W/kg）

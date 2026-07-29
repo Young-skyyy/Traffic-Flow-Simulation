@@ -37,9 +37,9 @@ def calc_understeer_gradient(vehicle):
     Kus = Wf/Cf - Wr/Cr
     其中 Wf = m·g·b/L, Wr = m·g·a/L 为前后轴静态载荷
 
-    Kus > 0 → 不足转向（安全，大多数量产车）
+    Kus > 0 → 不足转向
     Kus = 0 → 中性转向
-    Kus < 0 → 过度转向（危险，高速时可能失控）
+    Kus < 0 → 过度转向
     """
     m = vehicle.mass
     a = vehicle.cg_to_front

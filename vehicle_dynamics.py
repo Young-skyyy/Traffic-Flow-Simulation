@@ -101,4 +101,4 @@ if __name__ == "__main__":
     # show_wltc_summary()
     # simulate_wltc(car_sedan)
 
-    print("\n试试改参数：制动摩擦系数 0.7→0.3（雨天）、坡度 5%→10%（陡坡）看结果变化")
+    print()

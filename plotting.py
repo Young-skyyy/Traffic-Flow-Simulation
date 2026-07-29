@@ -4,7 +4,7 @@ BSFC 万有特性热力图绘制
 """
 
 import matplotlib
-matplotlib.use("Agg")  # 非交互式后端，避免弹窗报错
+matplotlib.use("Agg")  # 非交互式后端
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.interpolate import RectBivariateSpline

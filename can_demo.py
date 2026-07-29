@@ -1,13 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 CAN 总线多 ECU 仿真器
-纯 Python，模拟真实整车 CAN 网络中的多个 ECU 周期性发送报文，
-支持 DBC 式信号解析 + DTC 故障码生成。
-
-适用场景：
-  - 理解 CAN 报文格式与信号解析
-  - 模拟 HiL 测试中的 ECU 数据源
-  - CAN 日志生成，供上位机/诊断工具消费
+模拟整车 CAN 网络中的多个 ECU 周期性发送报文，
+支持 DBC 式信号解析、DTC 故障码生成、ASC 日志导出。
 """
 
 import time
@@ -325,9 +320,7 @@ def simulate_dtc_check():
 # ============================================================
 # 7. DBC 文件生成器
 # ============================================================
-# DBC 是 Vector 公司的 CAN 数据库标准格式，CANoe / CANalyzer 直接读取。
-# 从 CAN_MESSAGES 字典自动导出，信号定义（start, len, scale, offset）
-# 完全对应 DBC 的 SG_ 字段。
+# DBC 文件格式：Vector CAN 数据库标准，CANoe / CANalyzer 直接读取。
 
 def generate_dbc(filepath="simulated_ecu.dbc", baudrate=500000):
     """从 CAN_MESSAGES 生成标准 DBC 文件"""
@@ -348,7 +341,7 @@ def generate_dbc(filepath="simulated_ecu.dbc", baudrate=500000):
     for msg_name, msg_def in CAN_MESSAGES.items():
         can_id = msg_def["id"]
         dlc = 8
-        transmitter = "EMS"  # 简化：所有报文都标 EMS 节点
+        transmitter = "EMS"  # 所有报文标 EMS 节点
         lines.append(f"\nBO_ {can_id} {msg_name}: {dlc} {transmitter}")
 
         for sig in msg_def["signals"]:
@@ -389,7 +382,7 @@ def simulate_can_bus_advanced(duration_s=10, baudrate=500000,
     """
     增强版 CAN 总线仿真，包含:
       - 总线负载率实时统计
-      - ASC 格式日志导出（可直接拖入 CANoe 回放）
+      - ASC 格式日志导出
       - 随机错误帧注入
 
     参数:
@@ -509,6 +502,3 @@ if __name__ == "__main__":
 
     # 场景 2：DTC 故障码扫描
     simulate_dtc_check()
-
-    print("\n提示: 修改 VehicleECU.update() 可自定义驾驶循环，")
-    print("      修改 CAN_MESSAGES 可增删 ECU 和信号定义。")
