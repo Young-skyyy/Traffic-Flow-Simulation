@@ -323,6 +323,176 @@ def simulate_dtc_check():
 
 
 # ============================================================
+# 7. DBC 文件生成器
+# ============================================================
+# DBC 是 Vector 公司的 CAN 数据库标准格式，CANoe / CANalyzer 直接读取。
+# 从 CAN_MESSAGES 字典自动导出，信号定义（start, len, scale, offset）
+# 完全对应 DBC 的 SG_ 字段。
+
+def generate_dbc(filepath="simulated_ecu.dbc", baudrate=500000):
+    """从 CAN_MESSAGES 生成标准 DBC 文件"""
+    nodes = sorted(set(
+        msg["desc"].split()[0] if msg["desc"] else "ECU"
+        for msg in CAN_MESSAGES.values()
+    ))
+    node_names = {name: name for name in ["EMS", "BMS", "ABS", "TCU", "BCM"]}
+
+    lines = []
+    lines.append('VERSION ""\n')
+    lines.append("\nNS_ : \n\tNS_DESC_\n\tCM_\n\tBA_DEF_\n\tBA_\n\tVAL_\n")
+    lines.append(f"\nBS_: {baudrate}\n")
+
+    # BU_: 节点列表
+    lines.append(f"\nBU_: {' '.join(nodes)}\n")
+
+    for msg_name, msg_def in CAN_MESSAGES.items():
+        can_id = msg_def["id"]
+        dlc = 8
+        transmitter = "EMS"  # 简化：所有报文都标 EMS 节点
+        lines.append(f"\nBO_ {can_id} {msg_name}: {dlc} {transmitter}")
+
+        for sig in msg_def["signals"]:
+            sig_name = sig["name"].replace(" ", "_")
+            start = sig["start"]
+            length = sig["len"]
+            byte_order = "1"  # Motorola (大端)
+            signed = "-" if sig["offset"] < 0 else "+"
+            scale = sig["scale"]
+            offset = sig["offset"]
+            min_val = 0
+            max_val = round((1 << length) - 1)
+            unit = sig["unit"] if sig["unit"] else ""
+            receivers = " ".join(n for n in nodes if n != transmitter) if len(nodes) > 1 else "Vector__XXX"
+
+            lines.append(
+                f' SG_ {sig_name} : {start}|{length}@{byte_order}{signed} '
+                f'({scale},{offset}) [{min_val}|{max_val}] "{unit}"  {receivers}'
+            )
+
+    # 周期属性
+    lines.append('\nBA_DEF_ SG_ "GenMsgCycleTime" INT 0 65535;')
+    lines.append('BA_DEF_DEF_ "GenMsgCycleTime" 0;')
+    for msg_name, msg_def in CAN_MESSAGES.items():
+        lines.append(f'BA_ "GenMsgCycleTime" BO_ {msg_def["id"]} {msg_def["cycle_ms"]};')
+
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+    print(f"[DBC 文件已生成] {filepath} ({len(CAN_MESSAGES)} 条报文, {baudrate//1000}kbps)")
+
+
+# ============================================================
+# 8. CAN 总线负载率统计 + ASC 日志 + 错误帧注入
+# ============================================================
+
+def simulate_can_bus_advanced(duration_s=10, baudrate=500000,
+                               error_rate=0.001, asc_log="can_log.asc"):
+    """
+    增强版 CAN 总线仿真，包含:
+      - 总线负载率实时统计
+      - ASC 格式日志导出（可直接拖入 CANoe 回放）
+      - 随机错误帧注入
+
+    参数:
+      duration_s   : 仿真时长 (秒)
+      baudrate     : 总线波特率 (bps), 典型 500k
+      error_rate   : 每秒每帧的错误注入概率, 0=无错误
+      asc_log      : ASC 日志文件路径, None=不导出
+    """
+    veh = VehicleECU()
+    dt = 0.01
+    total_steps = int(duration_s / dt)
+    timers = {name: 0 for name in CAN_MESSAGES}
+
+    # 负载率统计
+    total_bits = 0
+    total_frames = 0
+    error_frames = 0
+    bus_load_samples = []  # (time, load_pct)
+
+    # ASC 日志
+    asc_lines = []
+    if asc_log:
+        from datetime import datetime
+        asc_lines.append("date " + datetime.now().strftime("%a %b %d %H:%M:%S %Y"))
+        asc_lines.append("base hex  timestamps absolute")
+        asc_lines.append("internal events logged")
+        asc_lines.append("// 模拟 ECU: EMS, BMS, ABS, TCU, BCM")
+        asc_lines.append("Begin Triggerblock")
+
+    print(f"\n{'='*75}")
+    print(f"  CAN 总线增强仿真 | {baudrate//1000}kbps | {duration_s}s | 错误率 {error_rate:.1%}")
+    print(f"{'='*75}")
+    print(f"{'时间':>7}  {'帧数':>6}  {'负载率':>7}  {'错误':>5}  {'状态'}")
+    print("-" * 50)
+
+    last_report = -2.0
+    frames_this_window = 0
+
+    def calc_frame_bits(dlc=8):
+        """标准 CAN 2.0A 帧总位数: SOF+ID+RTR+IDE+r0+DLC+Data+CRC+ACK+EOF+IFS"""
+        return 1 + 11 + 1 + 1 + 1 + 4 + dlc * 8 + 15 + 1 + 7 + 3
+
+    for step in range(total_steps):
+        sim_time = step * dt
+        veh.update(dt)
+
+        for name, msg_def in CAN_MESSAGES.items():
+            timers[name] += dt * 1000
+            if timers[name] >= msg_def["cycle_ms"]:
+                timers[name] -= msg_def["cycle_ms"]
+
+                # 错误帧注入
+                is_error = random.random() < error_rate
+                if is_error:
+                    error_frames += 1
+                    frame_bits = 6  # 主动错误标志 = 6 dominant bits
+                    if asc_log:
+                        asc_lines.append(f"{sim_time:11.6f} 1  ErrorFrame      E")
+                else:
+                    frame_data = generate_frame(name, msg_def, veh, sim_time)
+                    frame_bits = calc_frame_bits(len(frame_data))
+                    if asc_log:
+                        data_hex = " ".join(f"{b:02X}" for b in frame_data)
+                        asc_lines.append(
+                            f"{sim_time:11.6f} 1  {msg_def['id']:>7d}             Rx   d 8 {data_hex}"
+                        )
+
+                total_bits += frame_bits
+                total_frames += 1
+                frames_this_window += 1
+
+        # 每秒报告负载率
+        if sim_time - last_report >= 1.0:
+            load_pct = (total_bits / baudrate) / (sim_time + 0.001) * 100
+            bus_load_samples.append((sim_time, load_pct))
+            status = "正常" if load_pct < 30 else ("注意" if load_pct < 60 else "过载!")
+            print(f"{sim_time:6.1f}s  {frames_this_window:>5}   {load_pct:>5.1f}%  "
+                  f"{error_frames:>4}   {status}")
+            frames_this_window = 0
+            last_report = sim_time
+
+    avg_load = (total_bits / baudrate) / duration_s * 100
+    print(f"\n结果: 总帧数 {total_frames} | 错误帧 {error_frames} | 平均负载 {avg_load:.1f}%")
+
+    # 保存 ASC 日志
+    if asc_log:
+        asc_lines.append("End Triggerblock")
+        with open(asc_log, "w", encoding="utf-8") as f:
+            f.write("\n".join(asc_lines))
+        print(f"[ASC 日志已导出] {asc_log} ({len(asc_lines)} 行)")
+
+    # 保存 DBC
+    generate_dbc()
+
+    return {
+        "total_frames": total_frames,
+        "error_frames": error_frames,
+        "avg_load_pct": avg_load,
+        "bus_load_samples": bus_load_samples,
+    }
+
+
+# ============================================================
 # 6. 主程序
 # ============================================================
 
@@ -334,8 +504,8 @@ if __name__ == "__main__":
 ╚══════════════════════════════════════════════╝
     """)
 
-    # 场景 1：CAN 总线运行仿真
-    simulate_can_bus(duration_s=5, print_interval_ms=300)
+    # 场景 1：CAN 总线增强仿真（负载率 + ASC 日志 + 错误帧 + DBC 生成）
+    simulate_can_bus_advanced(duration_s=10, error_rate=0.002)
 
     # 场景 2：DTC 故障码扫描
     simulate_dtc_check()
