@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-车辆动力学基础仿真
-从 traffic_flow.py 扩展 —— 把"车流量"升级为"一辆车怎么跑"
-涉及：加速度、制动距离、油耗、跟车模型
+车辆动力学仿真
+纵向：加速、制动、油耗、功率分解（爬坡/风阻/比功率）
+横向：自行车模型、不足转向、稳态/瞬态转向
 """
 
 from vehicle import (
@@ -72,7 +72,7 @@ if __name__ == "__main__":
     # show_wltc_summary()
     # simulate_wltc(car_sedan)
 
-    # 练习 5：跟车模型（交通流理论核心）
+    # 练习 5：跟车模型
     car_following_simulation()
 
     # 练习 6：功率分解 —— 爬坡功率、比功率、风阻功率
