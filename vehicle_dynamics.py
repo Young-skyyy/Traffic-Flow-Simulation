@@ -65,7 +65,7 @@ if __name__ == "__main__":
     # 练习 3：稳态油耗对比（BSFC 万有特性模型）
     show_fuel_table()
 
-    # 练习 4：面试仪表盘 —— BSFC 万有特性 + 横向动力学 四合一
+    # 练习 4：汇总仪表盘 —— BSFC 万有特性 + 横向动力学 四合一
     plot_dashboard(car_sedan)
 
     # 练习 4b：WLTC 标准循环瞬态仿真（耗时较长，注释掉按需运行）

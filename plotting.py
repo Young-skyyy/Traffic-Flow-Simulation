@@ -20,10 +20,8 @@ def plot_bsfc_map(save_path=None):
     纵轴: 扭矩负荷比
     等高线: BSFC (g/kWh)，越低越省油
 
-    面试时打开这张图，直接指给面试官看：
-      - 中间那片"岛"（~233 g/kWh）是最优区
-      - 左下角（低速低负荷）和右上角（高速满负荷）都是费油区
-      - 你的仿真模型每一步就是从车速推到这张图上的某个点
+    - 中间 ~233 g/kWh 区域为最优区
+    - 低速低负荷和高速满负荷区域油耗偏高
     """
     # 设置中文字体（Windows 用 SimHei / Microsoft YaHei）
     plt.rcParams["font.sans-serif"] = ["SimHei", "Microsoft YaHei", "DejaVu Sans"]
