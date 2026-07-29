@@ -359,7 +359,201 @@ def show_fuel_table():
 
 
 # ============================================================
-# 6. 跟车模型（交通工程核心）
+# 6. 瞬态油耗仿真（加速/减速/怠速 —— 非稳态工况）
+# ============================================================
+#
+# 稳态模型只算匀速巡航，但实际驾驶中瞬态工况大量存在：
+#   - 加速时：ECU 会加浓喷油（空燃比降低）以提升扭矩响应，
+#     同一 (转速,负荷) 点的 BSFC 比稳态高 10~30%
+#   - 减速时：收油门且转速 > 阈值 → 断油（DFCO, Decel Fuel Cut-Off），
+#     瞬时油耗降为 0，靠发动机制动
+#   - 换挡时：离合器断开瞬间扭矩中断，但发动机仍消耗怠速油量
+#
+# 本模块模拟一个驾驶循环，对比瞬态总油耗 vs 稳态估算，
+
+# ---- 简易城市工况循环：怠速→加速→巡航→减速→再加速→停车 ----
+# 格式: [(阶段名称, 持续秒数, 目标车速 km/h)]
+_URBAN_CYCLE = [
+    ("冷启动怠速",  5,   0),
+    ("起步加速",   10,  50),
+    ("中速巡航",   10,  50),
+    ("减速制动",    6,  20),
+    ("低速巡航",    8,  20),
+    ("再加速",      8,  60),
+    ("高速巡航",   10,  60),
+    ("减速停车",    8,   0),
+    ("热车怠速",    5,   0),
+]
+
+
+def simulate_transient_cycle(vehicle, cycle=None, dt=0.1):
+    """
+    模拟车辆跟随驾驶循环的瞬态油耗。
+
+    每一步的换算链：
+      1. 驾驶员模型：车速误差 → 油门/刹车开度
+      2. 油门 × 最大扭矩 → 发动机输出扭矩
+      3. 扭矩 - 阻力 → 轮端净扭矩 → 实际加速度
+      4. 加速度 > 0 → 加浓修正 (BSFC × 1.0~1.3)
+         油门 = 0 且 转速 > 阈值 → 断油 (BSFC = 0)
+      5. 查 BSFC map → 瞬时油耗 → 累计
+
+    返回: (总油耗L, 总距离m, 平均油耗L/100km, 稳态估算总油耗L)
+    """
+    cycle = cycle or _URBAN_CYCLE
+    total_time = sum(phase[1] for phase in cycle)
+    steps = int(total_time / dt)
+
+    # 车辆状态
+    speed = 0.0          # m/s
+    distance = 0.0       # m
+    total_fuel_L = 0.0   # 累计油耗 (L)
+    steady_fuel_L = 0.0  # 稳态估算累计 (假设瞬间到达目标速度并巡航)
+    gear = 0
+    engine_rpm = vehicle.idle_rpm
+
+    # 构建逐秒目标车速序列
+    targets = []
+    for _, duration, target_kmh in cycle:
+        targets.extend([target_kmh / 3.6] * int(duration / dt))
+
+    print(f"\n{'='*95}")
+    print(f"  瞬态油耗仿真 — {vehicle.name} — 简易城市工况 ({total_time}s)")
+    print(f"{'='*95}")
+    print(f"{'时间':>6}  {'目标':>5}  {'实际':>5}  {'油门':>5}  {'档位':>3}  "
+          f"{'转速':>6}  {'负荷':>5}  {'BSFC':>5}  {'瞬态油耗':>8}  {'累计':>7}")
+    print(f"{'s':>6}  {'km/h':>5}  {'km/h':>5}  {'%':>5}  {'':>3}  "
+          f"{'rpm':>6}  {'%':>5}  {'g/kWh':>5}  {'L/100km':>8}  {'L':>7}")
+    print("-" * 95)
+
+    idx = 0
+    last_print = -1.0
+    steady_last_speed = -1  # 稳态估算只在新目标车速变化时计算一次
+
+    for step in range(steps):
+        sim_time = step * dt
+        target_speed = targets[min(step, len(targets) - 1)]
+        target_kmh = target_speed * 3.6
+
+        # ---- 驾驶员模型 (P 控制器) ----
+        speed_error = target_speed - speed
+        if speed_error > 0.1:
+            throttle = min(1.0, 0.15 * speed_error + 0.05)  # 加速
+            brake = 0.0
+        elif speed_error < -0.1:
+            throttle = 0.0
+            brake = min(1.0, -0.2 * speed_error)            # 减速
+        else:
+            if target_speed < 0.5 and speed < 0.5:
+                # 停车：完全收油
+                throttle = 0.0
+                brake = 0.3 if speed > 0.05 else 0.0
+            else:
+                # 巡航：维持平衡油门
+                resistance = calc_resistance(vehicle, max(speed, 0.1))
+                cruise_torque = resistance * vehicle.wheel_radius
+                gear = vehicle.select_gear(speed * 3.6)
+                if gear > 0:
+                    total_ratio = vehicle.gear_ratios[gear - 1] * vehicle.final_drive
+                    engine_torque_needed = cruise_torque / (total_ratio * vehicle.trans_efficiency)
+                    throttle = min(1.0, engine_torque_needed / vehicle.max_torque + 0.02)
+                else:
+                    throttle = 0.02
+                brake = 0.0
+
+        # ---- 车辆动力学 ----
+        if throttle > 0.05 and speed < 1:
+            gear = 1  # 起步强制 1 档
+        else:
+            gear = vehicle.select_gear(speed * 3.6)
+        if gear > 0:
+            total_ratio = vehicle.gear_ratios[gear - 1] * vehicle.final_drive
+            engine_rpm = max(vehicle.idle_rpm,
+                             speed / (2 * math.pi * vehicle.wheel_radius) * total_ratio * 60)
+            resistance = calc_resistance(vehicle, max(speed, 0.1))
+            engine_torque = throttle * vehicle.max_torque
+            wheel_torque = engine_torque * total_ratio * vehicle.trans_efficiency
+            wheel_force = wheel_torque / vehicle.wheel_radius
+
+            # 制动力
+            if brake > 0:
+                brake_force = brake * vehicle.mass * 9.8 * 0.8  # 最大减速度 0.8g
+                wheel_force -= brake_force
+
+            net_force = wheel_force - resistance
+            acceleration = net_force / vehicle.mass
+        else:
+            engine_rpm = vehicle.idle_rpm
+            acceleration = 0
+            if brake > 0:
+                acceleration = -brake * 9.8 * 0.8
+
+        # 更新速度
+        speed = max(0, speed + acceleration * dt)
+        distance += speed * dt
+
+        # ---- 瞬态油耗计算 ----
+        if gear > 0 and throttle > 0.01:
+            load_ratio = min(1.0, engine_torque / vehicle.max_torque)
+            bsfc = _interpolate_bsfc(engine_rpm, max(0.01, load_ratio), vehicle.fuel_type)
+
+            # 加速加浓修正：加速度越大，喷油越浓
+            if acceleration > 0.1:
+                enrich_factor = 1.0 + min(0.35, acceleration * 0.5)
+                bsfc *= enrich_factor
+
+            engine_power_kw = engine_torque * engine_rpm * 2 * math.pi / 60 / 1000
+            fuel_mass_rate = bsfc * engine_power_kw / 3600  # g/s
+            fuel_vol_rate = fuel_mass_rate / vehicle.fuel_density  # L/s
+            total_fuel_L += fuel_vol_rate * dt
+
+            # 瞬时百公里油耗
+            if speed > 0.1:
+                inst_l100 = fuel_vol_rate * (360000 / (speed * 3.6))
+            else:
+                inst_l100 = 0
+        else:
+            # 减速断油 (DFCO)：收油门且转速高于怠速 → 断油
+            if engine_rpm > vehicle.idle_rpm + 300 and throttle < 0.01 and speed > 1:
+                bsfc = 0
+                inst_l100 = 0
+            else:
+                # 怠速油耗
+                bsfc = _interpolate_bsfc(vehicle.idle_rpm, 0.05, vehicle.fuel_type)
+                idle_power = vehicle.idle_rpm * vehicle.max_torque * 0.05 * 2 * math.pi / 60 / 1000
+                fuel_rate = bsfc * idle_power / 3600 / vehicle.fuel_density
+                total_fuel_L += fuel_rate * dt
+                inst_l100 = 99.9 if speed < 0.5 else fuel_rate * (360000 / (speed * 3.6))
+
+        # ---- 稳态估算（仅目标车速变化时记录一次 BSFC 查表值） ----
+        if abs(target_kmh - steady_last_speed) > 2:
+            steady_fuel_L += calc_fuel_consumption(vehicle, target_kmh, 0)  # 先不做累计，只做参考
+            steady_last_speed = target_kmh
+
+        # ---- 每秒打印 ----
+        if sim_time - last_print >= 1.0:
+            print(f"{sim_time:5.0f}s  {target_kmh:4.0f}   {speed*3.6:4.0f}   "
+                  f"{throttle*100:4.0f}%  {gear:>2}档  "
+                  f"{engine_rpm:5.0f}  {engine_torque/vehicle.max_torque*100 if gear>0 and throttle>0.01 else 0:4.0f}%  "
+                  f"{bsfc if gear>0 else 580:4.0f}  "
+                  f"{inst_l100:7.1f}  {total_fuel_L:6.3f}")
+            last_print = sim_time
+
+    # 稳态估算：按每个阶段车速巡航的油耗求和
+    steady_total = 0
+    for phase_name, duration, target_kmh in cycle:
+        if target_kmh > 0:
+            seg_dist = target_kmh / 3.6 * duration / 1000  # km
+            steady_total += calc_fuel_consumption(vehicle, target_kmh, seg_dist)
+
+    avg_L100 = total_fuel_L / (distance / 100000) if distance > 0 else 0
+    print(f"\n结果: 总油耗 {total_fuel_L:.3f}L | 总里程 {distance:.0f}m | 平均 {avg_L100:.1f} L/100km")
+    print(f"      稳态估算: {steady_total:.3f}L (仅算各阶段匀速巡航) | 瞬态比稳态多 {total_fuel_L-steady_total:.3f}L")
+    return total_fuel_L, distance, avg_L100, steady_total
+
+
+# ============================================================
+# 7. 跟车模型（交通工程核心）
 # ============================================================
 
 def car_following_simulation(lead_speed_kmh=60, follower_speed_kmh=70,
@@ -418,10 +612,13 @@ if __name__ == "__main__":
     # 练习 2：制动距离表（交通工程设计必算）
     show_braking_table()
 
-    # 练习 3：不同车型油耗对比
+    # 练习 3：稳态油耗对比（BSFC 万有特性模型）
     show_fuel_table()
 
-    # 练习 4：跟车模型（交通流理论核心）
+    # 练习 4：瞬态油耗仿真（城市工况 — 稳态 vs 瞬态对比）
+    simulate_transient_cycle(car_sedan)
+
+    # 练习 5：跟车模型（交通流理论核心）
     car_following_simulation()
 
     print("\n提示: 改参数试试 — 把路面摩擦系数从 0.7 改成 0.3（雨天）看制动距离变化")
