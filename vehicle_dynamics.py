@@ -366,16 +366,25 @@ def plot_bsfc_map(save_path=None):
     bsfc_data = np.array(_BSFC_GASOLINE)
     R, L = np.meshgrid(rpm, load)
 
+    # 加密网格到 200×150 使等高线平滑
+    rpm_fine = np.linspace(rpm[0], rpm[-1], 200)
+    load_fine = np.linspace(load[0], load[-1], 150)
+    R_fine, L_fine = np.meshgrid(rpm_fine, load_fine)
+    bsfc_fine = np.zeros_like(R_fine)
+    for i in range(len(load_fine)):
+        for j in range(len(rpm_fine)):
+            bsfc_fine[i, j] = _interpolate_bsfc(rpm_fine[j], load_fine[i] / 100.0)
+
     fig, ax = plt.subplots(figsize=(10, 7))
 
     # 填充等高线
     levels = [220, 240, 260, 280, 300, 330, 370, 420, 500]
-    cs = ax.contourf(R, L, bsfc_data, levels=levels, cmap="RdYlGn_r", alpha=0.85)
+    cs = ax.contourf(R_fine, L_fine, bsfc_fine, levels=levels, cmap="RdYlGn_r", alpha=0.85)
     cbar = fig.colorbar(cs, ax=ax, label="BSFC (g/kWh)", shrink=0.85)
     cbar.ax.tick_params(labelsize=9)
 
     # 标注线
-    ax.contour(R, L, bsfc_data, levels=levels, colors="black", linewidths=0.3)
+    ax.contour(R_fine, L_fine, bsfc_fine, levels=levels, colors="black", linewidths=0.3)
 
     # 标注最优区（找数组中最小值位置）
     min_flat = np.argmin(bsfc_data)
