@@ -97,11 +97,6 @@ python plot_dashboard.py
 
 *BSFC 万有特性 / 稳态转向响应 / 转弯半径 vs 车速 / 阶跃转向瞬态响应*
 
-### BSFC 万有特性 Map
-![BSFC Map](bsfc_map.png)
-
-*双线性插值等高线，颜色越深效率越高*
-
 ## 测试
 
 [![pytest](https://github.com/Young-skyyy/vehicle-physics-sim/actions/workflows/test.yml/badge.svg)](https://github.com/Young-skyyy/vehicle-physics-sim/actions/workflows/test.yml)
