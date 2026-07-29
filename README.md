@@ -12,8 +12,6 @@ A Python-based simulation toolkit for vehicle dynamics modeling, engine fuel con
 ├── plotting.py                 # BSFC heatmap (cubic spline + contourf)
 ├── vehicle_dynamics.py         # Entry point: imports & __main__ runner
 ├── can_demo.py                 # CAN bus simulation, DBC generation, error injection
-├── simulated_ecu.dbc           # Auto-generated DBC file (5 ECUs)
-├── can_log.asc                 # ASC trace log with timestamps
 ├── bsfc_map.png                # BSFC heatmap visualization
 ├── test_vehicle_dynamics.py    # Pytest unit tests for vehicle dynamics
 ├── test_can_demo.py            # Pytest unit tests for CAN bus
@@ -83,8 +81,8 @@ Running `vehicle_dynamics.py` generates:
 
 Running `can_demo.py` generates:
 - `simulated_ecu.dbc` — DBC database for 5 ECUs with full signal definitions
-- `can_log.asc` — ASC trace log with timestamps, ready for Vector CANoe import
-- Terminal output of bus load %, error frame count, and DTC summary
+- `can_log.asc` — ASC trace log, ready for Vector CANoe import
+- Terminal output: bus load %, error frame count, DTC summary
 
 ## Screenshots
 
