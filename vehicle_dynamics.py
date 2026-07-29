@@ -375,15 +375,14 @@ def plot_bsfc_map(save_path=None):
 
     fig, ax = plt.subplots(figsize=(10, 7))
 
-    # 填充等高线（30 层细密渐变）
-    levels = np.linspace(220, 500, 30)
+    # 填充等高线
+    levels = [220, 240, 260, 280, 300, 330, 360, 400, 450, 500]
     cs = ax.contourf(R_fine, L_fine, bsfc_fine, levels=levels, cmap="RdYlGn_r", alpha=0.85)
     cbar = fig.colorbar(cs, ax=ax, label="BSFC (g/kWh)", shrink=0.85)
     cbar.ax.tick_params(labelsize=9)
 
-    # 稀疏标注线（只在关键层级画）
-    label_levels = [240, 260, 280, 300, 330, 370, 420]
-    ax.contour(R_fine, L_fine, bsfc_fine, levels=label_levels, colors="black", linewidths=0.3)
+    # 标注线
+    ax.contour(R_fine, L_fine, bsfc_fine, levels=levels, colors="black", linewidths=0.3)
 
     # 标注最优区（找数组中最小值位置）
     min_flat = np.argmin(bsfc_data)
