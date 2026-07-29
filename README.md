@@ -93,7 +93,7 @@ python plot_dashboard.py
 ## 可视化
 
 ### 四合一汇总仪表盘
-![Dashboard](dashboard_20260729_164501.png)
+![Dashboard](dashboard_20260729_171328.png)
 
 *BSFC 万有特性 / 稳态转向响应 / 转弯半径 vs 车速 / 阶跃转向瞬态响应*
 

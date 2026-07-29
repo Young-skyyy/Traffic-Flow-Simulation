@@ -8,6 +8,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+import math
 from scipy.interpolate import RectBivariateSpline
 
 from bsfc import _BSFC_RPM_GRID, _BSFC_LOAD_GRID, _BSFC_GASOLINE
@@ -107,7 +108,7 @@ def _draw_bsfc_panel(ax):
 
 
 def _draw_steady_cornering_panel(ax, vehicle):
-    """右上：稳态转向响应 双Y轴（横摆角速度 + 侧向加速度 vs 车速）"""
+    """右上：稳态转向响应 双Y轴 + 中性转向参考线"""
     speeds = np.linspace(10, 150, 30)
     yaw_rates = []
     lateral_accs = []
@@ -119,11 +120,19 @@ def _draw_steady_cornering_panel(ax, vehicle):
 
     color1 = "#2c7bb6"
     color2 = "#d7191c"
+    color3 = "#7f7f7f"
 
     ax2_twin = ax.twinx()
 
     line1, = ax.plot(speeds, yaw_rates, color=color1, linewidth=2, label="横摆角速度")
     line2, = ax2_twin.plot(speeds, lateral_accs, color=color2, linewidth=2, linestyle="--", label="侧向加速度")
+
+    # 中性转向参考线：r_neutral = vx / L × δ
+    L = vehicle.wheelbase
+    delta = math.radians(3)
+    r_neutral = [math.degrees((v / 3.6) / L * delta) for v in speeds]
+    line3, = ax.plot(speeds, r_neutral, color=color3, linewidth=1, linestyle=":",
+                     label="中性转向(参考)")
 
     ax.set_xlabel("车速 (km/h)")
     ax.set_ylabel("横摆角速度 (deg/s)", color=color1)
@@ -132,7 +141,7 @@ def _draw_steady_cornering_panel(ax, vehicle):
     ax2_twin.tick_params(axis="y", labelcolor=color2)
 
     # 图例
-    lines = [line1, line2]
+    lines = [line1, line2, line3]
     labels = [l.get_label() for l in lines]
     ax.legend(lines, labels, loc="upper left", fontsize=8)
 
@@ -141,7 +150,7 @@ def _draw_steady_cornering_panel(ax, vehicle):
 
 
 def _draw_turn_radius_panel(ax, vehicle):
-    """左下：转弯半径 vs 车速（展示不足转向特征）"""
+    """左下：转弯半径 vs 车速 + 中性转向理论半径参考线"""
     speeds = np.linspace(10, 150, 30)
     radii = [calc_steady_state_cornering(vehicle, v, steer_angle_deg=3)["turn_radius_m"]
              for v in speeds]
@@ -149,11 +158,13 @@ def _draw_turn_radius_panel(ax, vehicle):
     ax.plot(speeds, radii, color="#1b7837", linewidth=2.5)
     ax.fill_between(speeds, radii, alpha=0.15, color="#1b7837")
 
-    # 标注低速参考半径
-    r_ref = radii[0]
-    ax.axhline(y=r_ref, color="gray", linestyle=":", alpha=0.6)
-    ax.annotate(f"低速半径 {r_ref:.0f}m", xy=(120, r_ref + 2),
-                fontsize=8, color="gray")
+    # 中性转向理论半径：R_neutral = L / δ
+    L = vehicle.wheelbase
+    delta = math.radians(3)
+    r_neutral = L / delta
+    ax.axhline(y=r_neutral, color="#d7191c", linestyle="--", alpha=0.7, linewidth=1.5)
+    ax.annotate(f"中性转向半径 {r_neutral:.1f}m",
+                xy=(120, r_neutral + 1.5), fontsize=8, color="#d7191c", fontweight="bold")
 
     # 标注不足转向趋势
     ax.annotate("不足转向 → 高速时\n转弯半径显著增大",
@@ -163,12 +174,12 @@ def _draw_turn_radius_panel(ax, vehicle):
 
     ax.set_xlabel("车速 (km/h)")
     ax.set_ylabel("转弯半径 (m)")
-    ax.set_title("转弯半径 vs 车速（不足转向特征）", fontweight="bold")
+    ax.set_title("转弯半径 vs 车速 + 中性转向参考", fontweight="bold")
     ax.grid(True, alpha=0.3)
 
 
 def _draw_step_steer_panel(ax, vehicle):
-    """右下：阶跃转向瞬态响应（80km/h, 3°方向盘）"""
+    """右下：阶跃转向瞬态响应 + 上升时间 / 超调 / 调节时间"""
     history = simulate_step_steer(vehicle, vx_kmh=80, steer_angle_deg=3, duration_s=3)
 
     times = [h[0] for h in history]
@@ -179,19 +190,42 @@ def _draw_step_steer_panel(ax, vehicle):
     r_steady = result["yaw_rate_deg_s"]
 
     ax.plot(times, r_deg, color="#2c7bb6", linewidth=2)
-    ax.axhline(y=r_steady, color="gray", linestyle="--", alpha=0.7)
-    ax.annotate(f"稳态值 {r_steady:.1f} deg/s",
-                xy=(2.0, r_steady + 0.5), fontsize=8, color="gray")
+    ax.axhline(y=r_steady, color="gray", linestyle="--", alpha=0.7, label=f"稳态 {r_steady:.1f}")
 
-    # 标注上升时间（达到稳态 90%）
+    # 上升时间（达到稳态 90%）
     target = 0.9 * r_steady
     rise_idx = next((i for i, r in enumerate(r_deg) if r >= target), None)
-    if rise_idx:
-        t_rise = times[rise_idx]
+    t_rise = times[rise_idx] if rise_idx else None
+    if t_rise:
         ax.axvline(x=t_rise, color="#d7191c", linestyle=":", alpha=0.6)
-        ax.annotate(f"90%上升\n{t_rise:.2f}s",
+        ax.annotate(f"90%上升 {t_rise:.2f}s",
                     xy=(t_rise + 0.1, r_steady * 0.3),
                     fontsize=8, color="#d7191c")
+
+    # 超调量
+    r_max = max(r_deg)
+    overshoot_pct = (r_max - r_steady) / r_steady * 100 if r_steady > 0 else 0
+    if overshoot_pct > 0.5:
+        ax.axhline(y=r_max, color="#d7191c", linestyle=":", alpha=0.4)
+        ax.annotate(f"超调 {overshoot_pct:.1f}%",
+                    xy=(times[r_deg.index(r_max)], r_max),
+                    xytext=(times[r_deg.index(r_max)] + 0.3, r_max + 1),
+                    fontsize=8, color="#d7191c",
+                    arrowprops=dict(arrowstyle="->", color="#d7191c", lw=1))
+
+    # 调节时间（进入 ±2% 带且不再跳出）
+    band = 0.02 * r_steady
+    settled_idx = None
+    for i in range(len(times) - 1, -1, -1):
+        if abs(r_deg[i] - r_steady) > band:
+            settled_idx = i + 1 if i + 1 < len(times) else None
+            break
+    if settled_idx and settled_idx < len(times):
+        t_settle = times[settled_idx]
+        ax.axvline(x=t_settle, color="#2c7bb6", linestyle=":", alpha=0.5)
+        ax.annotate(f"调节 ±2% {t_settle:.2f}s",
+                    xy=(t_settle + 0.1, r_steady * 0.65),
+                    fontsize=8, color="#2c7bb6")
 
     ax.set_xlabel("时间 (s)")
     ax.set_ylabel("横摆角速度 (deg/s)")
