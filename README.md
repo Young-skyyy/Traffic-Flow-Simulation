@@ -1,60 +1,43 @@
-# 咸丰县智慧文旅平台
+# Traffic-Flow-Simulation
 
-基于 Python Flask + MySQL 的智慧文旅后端系统，为咸丰县文旅局提供景区管理、活动发布、用户预约等 API 接口。
+交通流仿真与车辆动力学分析工具，基于 Python 实现，涵盖交通工程核心模型。
+
+## 功能模块
+
+| 模块 | 文件 | 说明 |
+|------|------|------|
+| 交通流量计算 | `traffic_flow.py` | 根据车速/间距计算单车道通行能力 |
+| 车辆动力学 | `vehicle_dynamics.py` | 加速性能、制动距离、油耗、跟车模型 |
+| 交通流仿真 | `traffic_sim.py` | 信号灯、多车道、事故影响、排队分析 |
+| CAN 总线仿真 | `can_demo.py` | 多 ECU 报文生成、DBC 式信号解析、DTC 故障码 |
 
 ## 技术栈
 
-| 层级 | 技术 |
-|------|------|
-| 后端框架 | Flask (Python) |
-| 数据库 | MySQL 8.4 |
-| 数据生成 | Python 脚本批量造数 |
-| 数据格式 | RESTful JSON API |
-
-## 项目结构
-
-```
-trae_projects/
-├── app.py                  # Flask API 主程序（6 个接口）
-├── gen_scenic_data.py      # 景区测试数据生成器
-├── test_db.py              # MySQL 连接测试
-├── traffic_data.csv        # 交通流量 CSV 数据
-├── xianfeng_scenic.csv     # 咸丰县 15 个景区数据（CSV）
-├── sql_demo.sql            # SQL 学习演示脚本
-├── traffic_flow.py         # 交通流量计算器
-└── README.md
-```
-
-## API 接口
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/scenic` | 景区列表，支持 `?category=` `?keyword=` |
-| GET | `/api/scenic/<id>` | 景区详情 + 关联活动 |
-| GET | `/api/activity` | 活动列表，支持 `?scenic_id=` `?type=` |
-| POST | `/api/booking` | 提交预约 |
-| GET | `/api/booking` | 预约查询 |
-| GET | `/api/stats` | 平台统计看板 |
-
-## 数据库
-
-- 数据库名：`tourism_db`
-- 景区表 `scenic_spot`：15 个咸丰县真实景点（坪坝营、黄金洞、唐崖土司城等）
-- 活动表 `activity`：49 场文旅活动
-- 预约表 `booking`：200 条用户预约
+- Python 3
+- 物理建模（阻力、制动、油耗）
+- 交通工程理论（流量、延误、排队、通行能力）
 
 ## 快速开始
 
 ```bash
-# 1. 安装依赖
-pip install flask mysql-connector-python
+# 交通流量计算
+python traffic_flow.py
 
-# 2. 生成测试数据（可选）
-python gen_scenic_data.py
+# 车辆动力学仿真（加速/制动/油耗/跟车）
+python vehicle_dynamics.py
 
-# 3. 启动服务
-python app.py
+# 交通流仿真（信号灯/多车道/事故场景）
+python traffic_sim.py
 
-# 4. 浏览器访问
-http://localhost:5000/api/scenic
+# CAN 总线仿真（5 个 ECU + 故障码扫描）
+python can_demo.py
 ```
+
+## 仿真场景
+
+- 不同车速/间距下的通行能力对比
+- 轿车/SUV/卡车/公交的加速与制动性能
+- 信号灯控制下的排队与延误分析
+- 双车道左转专用相位仿真
+- 突发事故对通行能力的影响
+- 多车型百公里油耗对比
