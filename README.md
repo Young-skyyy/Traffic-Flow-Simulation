@@ -10,10 +10,12 @@ A Python-based simulation toolkit for vehicle dynamics modeling, fuel consumptio
 ├── can_demo.py            # CAN bus simulation, DBC generation, error injection
 ├── traffic_sim.py         # Traffic signal, multi-lane queue, accident simulation
 ├── traffic_flow.py        # Road capacity & traffic flow fundamentals
-├── simulated_ecu.dbc      # Auto-generated DBC file (5 ECUs, Vector CANoe compatible)
-├── can_log.asc            # ASC trace log with timestamps
-├── bsfc_map.png           # BSFC heatmap visualization
-├── requirements.txt       # Python dependencies
+├── simulated_ecu.dbc           # Auto-generated DBC file (5 ECUs, Vector CANoe compatible)
+├── can_log.asc                 # ASC trace log with timestamps
+├── bsfc_map.png                # BSFC heatmap visualization
+├── test_vehicle_dynamics.py    # Pytest unit tests for vehicle dynamics module
+├── test_can_demo.py            # Pytest unit tests for CAN bus module
+├── requirements.txt            # Python dependencies
 └── README.md
 ```
 
@@ -98,6 +100,30 @@ Running `can_demo.py` generates:
 ![BSFC Map](bsfc_map.png)
 
 *Bilinear interpolation on brake specific fuel consumption contours. Lower BSFC (darker regions) indicates higher engine thermal efficiency.*
+
+## Testing
+
+[![pytest](https://img.shields.io/badge/pytest-66%20passed-green)](https://github.com/Young-skyyy/Traffic-Flow-Simulation)
+
+66 unit tests covering core functions with pytest. Run locally:
+
+```bash
+pip install pytest
+python -m pytest test_vehicle_dynamics.py test_can_demo.py -v
+```
+
+**Covered test areas:**
+- `Vehicle` class: initialization, gear selection logic
+- `calc_resistance`: rolling + aero drag formula validation
+- `calc_braking_distance`: reaction + braking physics, wet/dry conditions
+- `_interpolate_bsfc`: bilinear interpolation, map boundary clamping, diesel vs gasoline
+- `_calc_l100_raw`: fuel consumption at various cruise speeds
+- `get_wltc_profile`: WLTC Class 3 profile integrity (1801 data points)
+- `encode_signal` / `decode_signal`: CAN signal encoding round-trip, scale/offset, range clamping
+- `build_can_frame` / `parse_can_frame`: full frame encode/decode for all 5 ECUs
+- `VehicleECU`: state machine bounds, gear progression
+- `generate_dbc`: DBC file generation and content validation
+- `CAN_MESSAGES`: signal bit layout integrity (no overlaps, within 64 bits)
 
 ## Key Techniques
 
