@@ -51,15 +51,15 @@ from plot_dashboard import plot_dashboard
 if __name__ == "__main__":
     print("""
 ╔══════════════════════════════════════════════╗
-║       车辆动力学基础仿真                       ║
-║       交通工程 + Python + 物理                ║
+║         车辆动力学仿真                         ║
+║         Python + 物理建模                     ║
 ╚══════════════════════════════════════════════╝
     """)
 
     # 练习 1：看轿车加速到 100 km/h 的过程
     simulate_acceleration(car_sedan, target_speed_kmh=100)
 
-    # 练习 2：制动距离表（交通工程设计必算）
+    # 练习 2：制动距离表
     show_braking_table()
 
     # 练习 3：稳态油耗对比（BSFC 万有特性模型）
