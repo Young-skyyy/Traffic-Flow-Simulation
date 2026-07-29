@@ -92,7 +92,7 @@ python plot_dashboard.py
 
 ## 测试
 
-[![pytest](https://img.shields.io/badge/pytest-84%20passed-green)](https://github.com/Young-skyyy/vehicle-physics-sim)
+[![pytest](https://github.com/Young-skyyy/vehicle-physics-sim/actions/workflows/test.yml/badge.svg)](https://github.com/Young-skyyy/vehicle-physics-sim/actions/workflows/test.yml)
 
 84 条单元测试，覆盖核心函数。本地运行：
 
