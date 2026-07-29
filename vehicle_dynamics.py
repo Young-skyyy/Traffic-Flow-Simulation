@@ -56,33 +56,49 @@ if __name__ == "__main__":
 ╚══════════════════════════════════════════════╝
     """)
 
-    # 练习 1：看轿车加速到 100 km/h 的过程
+    # ========================
+    # 纵向动力学
+    # ========================
+
+    # 1. 加速仿真：轿车 0→100 km/h
     simulate_acceleration(car_sedan, target_speed_kmh=100)
 
-    # 练习 2：制动距离表
+    # 2. 制动距离对照表
     show_braking_table()
 
-    # 练习 3：稳态油耗对比（BSFC 万有特性模型）
+    # 3. 油耗对比：三车型（轿车/SUV/卡车）BSFC 模型
     show_fuel_table()
 
-    # 练习 4：汇总仪表盘 —— BSFC 万有特性 + 横向动力学 四合一
-    plot_dashboard(car_sedan)
-
-    # 练习 4b：WLTC 标准循环瞬态仿真（耗时较长，注释掉按需运行）
-    # show_wltc_summary()
-    # simulate_wltc(car_sedan)
-
-    # 练习 5：跟车模型
+    # 4. 跟车模型：前车匀速、后车减速避免碰撞
     car_following_simulation()
 
-    # 练习 6：功率分解 —— 爬坡功率、比功率、风阻功率
+    # 5. 功率分解：爬坡功率 / 比功率 / 风阻功率
     show_power_breakdown(car_sedan, speed_kmh=100, grade_percent=5)
     show_power_breakdown(car_suv, speed_kmh=100, grade_percent=5)
     show_power_breakdown(car_truck, speed_kmh=80, grade_percent=3)
 
-    # 练习 7：横向动力学 —— 自行车模型、不足/过度转向
+    # ========================
+    # 横向动力学
+    # ========================
+
+    # 6. 不足转向分析：Kus 梯度 + 特征/临界车速
     show_lateral_analysis(car_sedan)
+
+    # 7. 稳态转向：横摆角速度 / 侧向加速度 / 转弯半径 vs 车速
     show_steady_cornering_table(car_sedan)
+
+    # 8. 阶跃转向瞬态响应：突然打方向后横摆收敛过程
     show_step_steer_response(car_sedan, vx_kmh=80, steer_deg=3)
 
-    print("\n提示: 改参数试试 — 把路面摩擦系数从 0.7 改成 0.3（雨天）看制动距离变化")
+    # ========================
+    # 可视化汇总
+    # ========================
+
+    # 9. 四合一仪表盘：BSFC + 稳态转向 + 转弯半径 + 阶跃瞬态
+    plot_dashboard(car_sedan)
+
+    # [可选] WLTC 标准循环瞬态仿真（1800s，耗时较长）
+    # show_wltc_summary()
+    # simulate_wltc(car_sedan)
+
+    print("\n试试改参数：制动摩擦系数 0.7→0.3（雨天）、坡度 5%→10%（陡坡）看结果变化")
