@@ -1,127 +1,125 @@
-# Vehicle Dynamics & CAN Bus Simulation Toolkit
+# Vehicle Physics Simulation
 
-A Python-based simulation toolkit for vehicle dynamics modeling, engine fuel consumption analysis, and CAN bus simulation. Built for automotive testing and HiL validation workflows.
+Python 车辆动力学仿真工具包。覆盖纵向动力学（加速/制动/油耗/功率分解）与横向动力学（自行车模型/不足转向/阶跃瞬态响应），84 条 pytest 测试。
 
-## Project Structure
+## 项目结构
 
 ```
 .
-├── vehicle.py                  # Vehicle class, resistance, acceleration, braking
-├── bsfc.py                     # BSFC map data, bilinear interpolation, fuel calc
-├── wltc.py                     # WLTC Class 3 cycle, transient simulation
-├── plotting.py                 # BSFC heatmap (cubic spline + contourf)
-├── vehicle_dynamics.py         # Entry point: imports & __main__ runner
-├── can_demo.py                 # CAN bus simulation, DBC generation, error injection
-├── bsfc_map.png                # BSFC heatmap visualization
-├── test_vehicle_dynamics.py    # Pytest unit tests for vehicle dynamics
-├── test_can_demo.py            # Pytest unit tests for CAN bus
-├── requirements.txt            # Python dependencies
+├── vehicle.py                  # Vehicle 类、行驶阻力、加速、制动、功率分解
+├── lateral_dynamics.py         # 自行车模型、侧偏角、不足转向、阶跃转向瞬态
+├── bsfc.py                     # BSFC 万有特性数据、双线性插值、油耗计算
+├── wltc.py                     # WLTC Class 3 工况、瞬态油耗仿真
+├── plotting.py                 # BSFC 热力图（三次样条 + contourf）
+├── plot_dashboard.py           # 四合一汇总图（BSFC+稳态转向+半径+瞬态）
+├── vehicle_dynamics.py         # 主入口：import 汇总 + __main__ runner
+├── can_demo.py                 # CAN 总线仿真、DBC 生成、错误注入
+├── test_vehicle_dynamics.py    # 车辆动力学 pytest 测试（84 条）
+├── test_can_demo.py            # CAN 总线 pytest 测试
+├── requirements.txt            # Python 依赖
 └── README.md
 ```
 
-## Modules
+## 模块
 
-| Module | Files | Description |
-|--------|-------|-------------|
-| Vehicle Physics | `vehicle.py` | Vehicle class, resistance, acceleration, braking distance |
-| Fuel Model | `bsfc.py` | BSFC map (180 data points), bilinear interpolation, L/100km |
-| WLTC Cycle | `wltc.py` | Class 3 driving cycle (1800s), transient fuel simulation |
-| Visualization | `plotting.py` | BSFC heatmap with cubic spline smoothing |
-| CAN Bus | `can_demo.py` | 5-ECU message generation, DBC/ASC export, bus load, error injection |
+| 模块 | 文件 | 说明 |
+|------|------|------|
+| 车辆物理 | `vehicle.py` | Vehicle 类、行驶阻力、加速、制动、比功率 |
+| 功率分解 | `vehicle.py` | 爬坡功率、风阻功率、比功率、动态滚动阻力(SAE J2263) |
+| 横向动力学 | `lateral_dynamics.py` | 2-DOF 自行车模型、侧偏角、不足转向梯度、稳态/瞬态转向 |
+| 油耗模型 | `bsfc.py` | BSFC Map（180 数据点）、双线性插值、L/100km |
+| WLTC 工况 | `wltc.py` | Class 3 行驶工况（1800s）、瞬态油耗仿真 |
+| 可视化 | `plotting.py`, `plot_dashboard.py` | BSFC 热力图、四合一汇总仪表盘 |
+| CAN 总线 | `can_demo.py` | 5-ECU 报文生成、DBC/ASC 导出、总线负载、错误注入 |
 
-## Features
+## 功能
 
-### Vehicle Dynamics & Fuel Model
-- **Vehicle physical model**: powertrain parameters, aerodynamic drag, rolling resistance
-- **BSFC interpolation**: bilinear interpolation on brake specific fuel consumption map for instantaneous fuel rate
-- **WLTC Class 3 cycle**: full 1800-second transient simulation with DFCO (deceleration fuel cut-off), acceleration enrichment, and driver model
-- **Phase-by-phase analysis**: Low / Medium / High / Extra-High speed phase breakdown
-- **BSFC heatmap**: matplotlib visualization of engine efficiency contours
+### 纵向动力学
+- 车辆物理建模：动力总成参数、空气阻力（v²）、滚动阻力（常量和 SAE J2263 动态模型）
+- 加速仿真：0-100 km/h 过程，基于 P=Fv 的驱动力模型
+- 制动距离：反应距离 + 制动距离，不同路面摩擦系数
+- 油耗计算：BSFC 双线性插值 + WLTC 瞬态仿真（含断油/加速加浓）
+- 功率分解：滚动阻力功率、风阻功率（v³）、爬坡功率、比功率（W/kg）
 
-### CAN Bus Simulation
-- **5 simulated ECUs**: EMS, BMS, ABS, TCU, BCM with realistic message timing
-- **Auto-generated DBC file**: signal definitions, value tables, multiplexed messages
-- **ASC log export**: timestamped trace log, directly importable into Vector CANoe
-- **Bus load monitoring**: real-time load percentage (typically < 35% at 500 kbps)
-- **Error frame injection**: configurable error rate for robustness testing
-- **DTC fault scanning**: diagnostic trouble code enumeration
+### 横向动力学
+- 2-DOF 自行车模型：侧偏角 αf/αr、横摆角速度 r、侧向速度 vy
+- 不足转向梯度 Kus：前后轴载荷 + 侧偏刚度 → 不足/中性/过度转向分类
+- 稳态转向响应：定方向盘转角下，横摆角速度、侧向加速度、转弯半径 vs 车速
+- 阶跃转向瞬态：欧拉积分仿真，90% 上升时间
 
-## Quick Start
+### CAN 总线仿真
+- 5 个模拟 ECU：EMS、BMS、ABS、TCU、BCM
+- 自动生成 DBC 文件 + ASC 日志
+- 总线负载监控 + 错误帧注入 + DTC 故障扫描
 
-### Prerequisites
+## 快速开始
+
+### 环境
 - Python 3.8+
-- Dependencies listed in `requirements.txt`
+- 依赖见 `requirements.txt`
 
-### Installation
+### 安装
 
 ```bash
-git clone https://github.com/Young-skyyy/Traffic-Flow-Simulation.git
-cd Traffic-Flow-Simulation
+git clone https://github.com/Young-skyyy/vehicle-physics-sim.git
+cd vehicle-physics-sim
 pip install -r requirements.txt
 ```
 
-### Run Simulations
+### 运行
 
 ```bash
-# Vehicle dynamics: acceleration, braking, fuel consumption, WLTC cycle
+# 车辆动力学：加速、制动、油耗、功率分解、横向转向
 python vehicle_dynamics.py
 
-# CAN bus simulation: ECU messages, DBC generation, ASC log
+# CAN 总线仿真：ECU 报文、DBC 生成、ASC 日志
 python can_demo.py
+
+# 仪表盘汇总图
+python plot_dashboard.py
 ```
 
-### Sample Outputs
+### 输出
 
-Running `vehicle_dynamics.py` generates:
-- Acceleration curve (0-100 km/h)
-- Braking distance vs. initial speed
-- Fuel consumption (L/100km) for different vehicle types
-- BSFC heatmap (`bsfc_map.png`)
-- WLTC cycle speed profile and phase fuel statistics
+运行 `vehicle_dynamics.py` 输出：
+- 加速曲线（0-100 km/h）
+- 制动距离对照表
+- 三车型油耗对比（L/100km）
+- 功率分解（常量 vs SAE J2263 动态滚动阻力）
+- 横向动力学分析（不足转向梯度、稳态转向、阶跃瞬态响应）
+- BSFC 热力图（`bsfc_map.png`）
+- 四合一汇总仪表盘（`dashboard_*.png`）
 
-Running `can_demo.py` generates:
-- `simulated_ecu.dbc` — DBC database for 5 ECUs with full signal definitions
-- `can_log.asc` — ASC trace log, ready for Vector CANoe import
-- Terminal output: bus load %, error frame count, DTC summary
+## 测试
 
-## Screenshots
+[![pytest](https://img.shields.io/badge/pytest-84%20passed-green)](https://github.com/Young-skyyy/vehicle-physics-sim)
 
-### BSFC Engine Efficiency Map
-![BSFC Map](bsfc_map.png)
-
-*Bilinear interpolation on brake specific fuel consumption contours. Lower BSFC (darker regions) indicates higher engine thermal efficiency.*
-
-## Testing
-
-[![pytest](https://img.shields.io/badge/pytest-66%20passed-green)](https://github.com/Young-skyyy/Traffic-Flow-Simulation)
-
-66 unit tests covering core functions with pytest. Run locally:
+84 条单元测试，覆盖核心函数。本地运行：
 
 ```bash
 pip install pytest
 python -m pytest test_vehicle_dynamics.py test_can_demo.py -v
 ```
 
-**Covered test areas:**
-- `Vehicle` class: initialization, gear selection logic
-- `calc_resistance`: rolling + aero drag formula validation
-- `calc_braking_distance`: reaction + braking physics, wet/dry conditions
-- `_interpolate_bsfc`: bilinear interpolation, map boundary clamping, diesel vs gasoline
-- `_calc_l100_raw`: fuel consumption at various cruise speeds
-- `get_wltc_profile`: WLTC Class 3 profile integrity (1801 data points)
-- `encode_signal` / `decode_signal`: CAN signal encoding round-trip, scale/offset, range clamping
-- `build_can_frame` / `parse_can_frame`: full frame encode/decode for all 5 ECUs
-- `VehicleECU`: state machine bounds, gear progression
-- `generate_dbc`: DBC file generation and content validation
-- `CAN_MESSAGES`: signal bit layout integrity (no overlaps, within 64 bits)
+**测试覆盖：**
+- `Vehicle` 类：初始化、档位选择、横向参数默认值
+- `calc_resistance`：滚动+风阻公式、动态/常量滚动阻力对比
+- `calc_braking_distance`：反应+制动物理、湿/干路面
+- `_interpolate_bsfc`：双线性插值、边界钳位、柴油 vs 汽油
+- `_calc_l100_raw`：各车速巡航油耗
+- `get_wltc_profile`：WLTC Class 3 数据完整性（1801 数据点）
+- 功率函数：爬坡功率、比功率、风阻功率（v³ 关系）
+- 横向动力学：侧偏角、不足转向梯度、特征/临界车速、稳态转向、阶跃瞬态收敛
+- CAN 信号：编解码、DBC 生成、ECU 状态机
 
-## Key Techniques
+## 关键技术
 
-- **Bilinear interpolation** on empirical BSFC maps for engine efficiency lookup
-- **Transient fuel correction**: DFCO (fuel cut during deceleration), acceleration enrichment factor
-- **CAN frame encoding**: 11-bit arbitration, Intel/Motorola byte ordering, signal packing within 8-byte payloads
-- **Vehicle physics**: Newton's second law with aerodynamic drag ($F_d = \\frac{1}{2} \\rho C_d A v^2$) and rolling resistance
+- **BSFC 双线性插值**：在发动机万有特性图上查找瞬时油耗
+- **SAE J2263 滑行阻力模型**：f₀ + f₁v + f₄v⁴ 动态滚动阻力系数
+- **2-DOF 自行车模型**：侧偏角 → 侧向力 → 横摆力矩 → 状态空间欧拉积分
+- **不足转向梯度**：Kus = Wf/Cf - Wr/Cr，区分不足/中性/过度转向
+- **CAN 帧编解码**：11-bit 仲裁域、Intel/Motorola 字节序、8 字节载荷信号打包
 
 ## License
 
-This project is for educational and portfolio demonstration purposes.
+仅供学习和作品展示。
