@@ -75,20 +75,42 @@ def plot_dashboard(vehicle=None, save_path=None):
 
 
 def _draw_bsfc_panel(ax):
-    """左上：BSFC 万有特性等高线图"""
+    """左上：BSFC 万有特性等高线图 + 等功率线"""
     rpm = np.array(_BSFC_RPM_GRID)
-    load = np.array(_BSFC_LOAD_GRID) * 100
+    load_pct = np.array(_BSFC_LOAD_GRID) * 100
     bsfc_data = np.array(_BSFC_GASOLINE)
 
-    spline = RectBivariateSpline(load, rpm, bsfc_data, kx=3, ky=3)
+    spline = RectBivariateSpline(load_pct, rpm, bsfc_data, kx=3, ky=3)
     rpm_fine = np.linspace(rpm[0], rpm[-1], 200)
-    load_fine = np.linspace(load[0], load[-1], 150)
+    load_fine = np.linspace(load_pct[0], load_pct[-1], 150)
     R_fine, L_fine = np.meshgrid(rpm_fine, load_fine)
     bsfc_fine = spline(load_fine, rpm_fine)
 
     levels = [220, 240, 260, 280, 300, 330, 360, 400, 450, 500]
     cs = ax.contourf(R_fine, L_fine, bsfc_fine, levels=levels, cmap="RdYlGn_r", alpha=0.85)
     ax.contour(R_fine, L_fine, bsfc_fine, levels=levels, colors="black", linewidths=0.3)
+
+    # 等功率线：P = T × ω → load% = P / (Tmax × RPM × 2π/60)
+    # 参考 2.0L NA 汽油机 Tmax=180 Nm
+    max_torque = 180   # Nm
+    rpm_range = np.linspace(1000, 6200, 200)
+    power_levels_kw = [10, 20, 40, 60, 80, 100]
+
+    for pk in power_levels_kw:
+        # load = P / (Tmax × rpm × 2π/60) → load% = load × 100
+        load_vals = pk * 60000 / (max_torque * rpm_range * 2 * math.pi) * 100
+        # 截断超出 view 的部分
+        mask = (load_vals >= 0) & (load_vals <= 105)
+        ax.plot(rpm_range[mask], load_vals[mask],
+                color="white", linewidth=0.8, linestyle="--", alpha=0.5)
+
+        # 在曲线末端标注功率值
+        valid_rpm = rpm_range[mask]
+        valid_load = load_vals[mask]
+        if len(valid_rpm) > 0:
+            mid_i = len(valid_rpm) // 2
+            ax.annotate(f"{pk}kW", (valid_rpm[mid_i], valid_load[mid_i] + 1),
+                        fontsize=7, color="white", alpha=0.7, ha="center")
 
     # 三个典型工况点
     points = [
@@ -102,7 +124,7 @@ def _draw_bsfc_panel(ax):
 
     ax.set_xlabel("发动机转速 (RPM)")
     ax.set_ylabel("扭矩负荷比 (%)")
-    ax.set_title("BSFC 万有特性 Map", fontweight="bold")
+    ax.set_title("BSFC 万有特性 Map + 等功率线", fontweight="bold")
     fig = ax.figure
     fig.colorbar(cs, ax=ax, label="BSFC (g/kWh)", shrink=0.8)
 
