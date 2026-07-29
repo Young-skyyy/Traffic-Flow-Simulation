@@ -395,12 +395,14 @@ def plot_bsfc_map(save_path=None):
 
     plt.tight_layout()
 
-    if save_path:
-        plt.savefig(save_path, dpi=150)
-        print(f"BSFC 热力图已保存: {save_path}")
-    else:
-        plt.savefig("bsfc_map.png", dpi=150)
-        print("BSFC 热力图已保存: bsfc_map.png")
+    # 自动生成带时间戳的文件名
+    if save_path is None:
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        save_path = f"bsfc_map_{timestamp}.png"
+
+    plt.savefig(save_path, dpi=150)
+    print(f"[BSFC 热力图已保存] {save_path}")
     plt.close()
 
 
