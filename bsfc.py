@@ -1,15 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-油耗模型（BSFC 万有特性法）
-
-换算链：
-  车速 → 选档 → 发动机转速(veh.select_gear)
-  车速 → 行驶阻力(calc_resistance) → 轮端扭矩 → 发动机扭矩
-  (转速, 扭矩) → 查 BSFC map → 瞬时燃油消耗率(g/kWh)
-  → 油耗(L/100km) = BSFC × 功率 × 100 / (油密度 × 车速)
-
-BSFC (Brake Specific Fuel Consumption) 发动机效率等高线图：
-  g/kWh 越低效率越高，经济区 ~240 g/kWh/2000-3000 rpm
+BSFC 万有特性油耗模型：双线性插值查表 → L/100km
 """
 
 import math

@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-CAN 总线多 ECU 仿真器
-模拟整车 CAN 网络中的多个 ECU 周期性发送报文，
-支持 DBC 式信号解析、DTC 故障码生成、ASC 日志导出。
+CAN 总线多 ECU 仿真器：ECU 报文生成、DBC 导出、ASC 日志、DTC 故障码
 """
 
 import time
@@ -10,9 +8,7 @@ import random
 import struct
 
 
-# ============================================================
-# 1. CAN 帧定义（DBC 风格：每条消息的 ID、周期、信号列表）
-# ============================================================
+# 1. CAN 帧定义
 
 CAN_MESSAGES = {
     # 发动机 ECU —— 周期 10ms
@@ -87,9 +83,7 @@ CAN_MESSAGES = {
 }
 
 
-# ============================================================
-# 2. CAN 帧编码/解码（基于信号定义）
-# ============================================================
+# 2. CAN 帧编码/解码
 
 def encode_signal(value, sig):
     """将物理值编码为原始整数值"""
@@ -134,9 +128,7 @@ def parse_can_frame(data, msg_def):
     return result
 
 
-# ============================================================
-# 3. ECU 仿真器 —— 每辆车的运行状态
-# ============================================================
+# 3. ECU 仿真器
 
 class VehicleECU:
     """整车 ECU 状态机，维持车辆运行参数随时间连续变化"""
@@ -191,9 +183,7 @@ class VehicleECU:
         self.brake_pressure = random.uniform(0, 5) if not self.accelerating else 0
 
 
-# ============================================================
 # 4. CAN 总线仿真主循环
-# ============================================================
 
 def simulate_can_bus(duration_s=5, print_interval_ms=500):
     """
@@ -290,9 +280,7 @@ def generate_frame(name, msg_def, veh, sim_time):
         ])
 
 
-# ============================================================
 # 5. DTC 故障码仿真
-# ============================================================
 
 DTC_DATABASE = {
     "P0301": {"desc": "1缸失火检测", "ecu": "EMS"},
@@ -317,9 +305,7 @@ def simulate_dtc_check():
             print(f"  {code} | {dtc['ecu']} | {dtc['desc']}")
 
 
-# ============================================================
 # 7. DBC 文件生成器
-# ============================================================
 # DBC 文件格式：Vector CAN 数据库标准，CANoe / CANalyzer 直接读取。
 
 def generate_dbc(filepath="simulated_ecu.dbc", baudrate=500000):
@@ -373,24 +359,11 @@ def generate_dbc(filepath="simulated_ecu.dbc", baudrate=500000):
     print(f"[DBC 文件已生成] {filepath} ({len(CAN_MESSAGES)} 条报文, {baudrate//1000}kbps)")
 
 
-# ============================================================
-# 8. CAN 总线负载率统计 + ASC 日志 + 错误帧注入
-# ============================================================
+# 8. CAN 总线高级仿真（负载率 + ASC + 错误注入）
 
 def simulate_can_bus_advanced(duration_s=10, baudrate=500000,
                                error_rate=0.001, asc_log="can_log.asc"):
-    """
-    增强版 CAN 总线仿真，包含:
-      - 总线负载率实时统计
-      - ASC 格式日志导出
-      - 随机错误帧注入
-
-    参数:
-      duration_s   : 仿真时长 (秒)
-      baudrate     : 总线波特率 (bps), 典型 500k
-      error_rate   : 每秒每帧的错误注入概率, 0=无错误
-      asc_log      : ASC 日志文件路径, None=不导出
-    """
+    """增强版 CAN 仿真: 总线负载统计 + ASC 日志 + 错误帧注入"""
     veh = VehicleECU()
     dt = 0.01
     total_steps = int(duration_s / dt)
@@ -484,10 +457,6 @@ def simulate_can_bus_advanced(duration_s=10, baudrate=500000,
         "bus_load_samples": bus_load_samples,
     }
 
-
-# ============================================================
-# 6. 主程序
-# ============================================================
 
 if __name__ == "__main__":
     print("""

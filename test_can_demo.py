@@ -17,9 +17,7 @@ from can_demo import (
 )
 
 
-# ============================================================
 # encode_signal / decode_signal
-# ============================================================
 
 class TestSignalEncodeDecode:
     def test_encode_simple(self):
@@ -80,9 +78,7 @@ class TestSignalEncodeDecode:
         assert raw == 0
 
 
-# ============================================================
 # build_can_frame / parse_can_frame
-# ============================================================
 
 class TestCANFrameBuildParse:
     @pytest.fixture
@@ -142,9 +138,7 @@ class TestCANFrameBuildParse:
             assert len(parsed) == len(msg_def["signals"]), f"Failed parsing {name}"
 
 
-# ============================================================
 # VehicleECU
-# ============================================================
 
 class TestVehicleECU:
     def test_initial_state(self):
@@ -182,9 +176,7 @@ class TestVehicleECU:
         assert ecu.gear >= 4
 
 
-# ============================================================
 # generate_frame
-# ============================================================
 
 class TestGenerateFrame:
     def test_engine_data_returns_8_bytes(self):
@@ -199,9 +191,7 @@ class TestGenerateFrame:
             assert len(data) == 8, f"{name} returned {len(data)} bytes"
 
 
-# ============================================================
-# DTC Database
-# ============================================================
+# DTC 故障码
 
 class TestDTC:
     def test_dtc_database_not_empty(self):
@@ -219,9 +209,7 @@ class TestDTC:
         simulate_dtc_check()
 
 
-# ============================================================
 # generate_dbc
-# ============================================================
 
 class TestDBCGeneration:
     def test_generates_file(self, tmp_path):
@@ -260,9 +248,7 @@ class TestDBCGeneration:
         assert os.path.getsize(filepath) > 100  # should be a substantial file
 
 
-# ============================================================
 # CAN_MESSAGES definition integrity
-# ============================================================
 
 class TestCANMessages:
     def test_all_messages_have_required_fields(self):

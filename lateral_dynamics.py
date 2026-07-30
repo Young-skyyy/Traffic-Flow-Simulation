@@ -8,12 +8,7 @@ import math
 
 
 def calc_slip_angles(vehicle, vx_ms, vy_ms, yaw_rate, steer_angle_rad):
-    """计算前后轮侧偏角（rad）
-
-    侧偏角 = 轮胎运动方向 - 轮胎指向
-    αf = (vy + a·r) / vx  -  δ
-    αr = (vy - b·r) / vx
-    """
+    """前后轮侧偏角 αf = (vy+a·r)/vx - δ, αr = (vy-b·r)/vx (rad)"""
     a = vehicle.cg_to_front
     b = vehicle.cg_to_rear
     alpha_f = (vy_ms + a * yaw_rate) / vx_ms - steer_angle_rad
@@ -22,25 +17,14 @@ def calc_slip_angles(vehicle, vx_ms, vy_ms, yaw_rate, steer_angle_rad):
 
 
 def calc_cornering_forces(vehicle, alpha_f, alpha_r):
-    """线性轮胎模型：侧向力 = -C × α（N）
-
-    C 为侧偏刚度（正值），负号表示力与侧偏角反向
-    """
+    """线性轮胎模型: Fy = -C × α (N)"""
     Fyf = -vehicle.cornering_stiffness_f * alpha_f
     Fyr = -vehicle.cornering_stiffness_r * alpha_r
     return Fyf, Fyr
 
 
 def calc_understeer_gradient(vehicle):
-    """计算不足转向梯度 Kus（rad/g 和 deg/g）
-
-    Kus = Wf/Cf - Wr/Cr
-    其中 Wf = m·g·b/L, Wr = m·g·a/L 为前后轴静态载荷
-
-    Kus > 0 → 不足转向
-    Kus = 0 → 中性转向
-    Kus < 0 → 过度转向
-    """
+    """不足转向梯度 Kus = Wf/Cf - Wr/Cr (rad/g, deg/g)"""
     m = vehicle.mass
     a = vehicle.cg_to_front
     b = vehicle.cg_to_rear

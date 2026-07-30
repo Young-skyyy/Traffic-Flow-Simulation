@@ -13,16 +13,7 @@ from bsfc import _BSFC_RPM_GRID, _BSFC_LOAD_GRID, _BSFC_GASOLINE
 
 
 def plot_bsfc_map(save_path=None):
-    """
-    绘制汽油机 BSFC 万有特性等高线图。
-
-    横轴: 发动机转速 (RPM)
-    纵轴: 扭矩负荷比
-    等高线: BSFC (g/kWh)，越低越省油
-
-    - 中间 ~233 g/kWh 区域为最优区
-    - 低速低负荷和高速满负荷区域油耗偏高
-    """
+    """绘制 BSFC 万有特性等高线图，横轴 RPM / 纵轴 扭矩负荷比"""
     # 设置中文字体（Windows 用 SimHei / Microsoft YaHei）
     plt.rcParams["font.sans-serif"] = ["SimHei", "Microsoft YaHei", "DejaVu Sans"]
     plt.rcParams["axes.unicode_minus"] = False  # 解决负号显示问题

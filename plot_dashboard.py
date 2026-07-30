@@ -20,13 +20,7 @@ from lateral_dynamics import (
 
 
 def plot_dashboard(vehicle=None, save_path=None):
-    """四合一汇总图：
-
-    (0,0) BSFC 万有特性 Map
-    (0,1) 稳态转向响应（横摆角速度 + 侧向加速度 vs 车速）
-    (1,0) 转弯半径 vs 车速
-    (1,1) 阶跃转向瞬态响应（横摆角速度随时间收敛）
-    """
+    """四合一仪表盘: BSFC Map + 稳态转向 + 转弯半径 + 阶跃瞬态"""
     if vehicle is None:
         vehicle = car_sedan
 
@@ -38,27 +32,19 @@ def plot_dashboard(vehicle=None, save_path=None):
     fig.suptitle(f"{vehicle.name} — 动力总成 & 横向动力学 综合分析",
                  fontsize=16, fontweight="bold", y=0.98)
 
-    # ==========================================
-    # 左上：BSFC 万有特性 Map
-    # ==========================================
+    # 左上: BSFC Map
     ax1 = fig.add_subplot(2, 2, 1)
     _draw_bsfc_panel(ax1)
 
-    # ==========================================
-    # 右上：稳态转向响应（双 Y 轴）
-    # ==========================================
+    # 右上: 稳态转向响应 (双Y轴)
     ax2 = fig.add_subplot(2, 2, 2)
     _draw_steady_cornering_panel(ax2, vehicle)
 
-    # ==========================================
-    # 左下：转弯半径 vs 车速
-    # ==========================================
+    # 左下: 转弯半径 vs 车速
     ax3 = fig.add_subplot(2, 2, 3)
     _draw_turn_radius_panel(ax3, vehicle)
 
-    # ==========================================
-    # 右下：阶跃转向瞬态响应
-    # ==========================================
+    # 右下: 阶跃转向瞬态响应
     ax4 = fig.add_subplot(2, 2, 4)
     _draw_step_steer_panel(ax4, vehicle)
 
@@ -75,7 +61,7 @@ def plot_dashboard(vehicle=None, save_path=None):
 
 
 def _draw_bsfc_panel(ax):
-    """左上：BSFC 万有特性等高线图 + 等功率线"""
+    """BSFC 等高线图 + 等功率线"""
     rpm = np.array(_BSFC_RPM_GRID)
     load_pct = np.array(_BSFC_LOAD_GRID) * 100
     bsfc_data = np.array(_BSFC_GASOLINE)
@@ -97,7 +83,7 @@ def _draw_bsfc_panel(ax):
     power_levels_kw = [10, 20, 40, 60, 80, 100]
 
     for pk in power_levels_kw:
-        # load = P / (Tmax × rpm × 2π/60) → load% = load × 100
+        # load = P / (Tmax × rpm × 2π/60), load% = load × 100
         load_vals = pk * 60000 / (max_torque * rpm_range * 2 * math.pi) * 100
         # 截断超出 view 的部分
         mask = (load_vals >= 0) & (load_vals <= 105)
@@ -130,7 +116,7 @@ def _draw_bsfc_panel(ax):
 
 
 def _draw_steady_cornering_panel(ax, vehicle):
-    """右上：稳态转向响应 双Y轴 + 中性转向参考线"""
+    """稳态转向响应 双Y轴 + 中性转向参考"""
     speeds = np.linspace(10, 150, 30)
     yaw_rates = []
     lateral_accs = []
@@ -172,7 +158,7 @@ def _draw_steady_cornering_panel(ax, vehicle):
 
 
 def _draw_turn_radius_panel(ax, vehicle):
-    """左下：转弯半径 vs 车速 + 中性转向理论半径参考线"""
+    """转弯半径 vs 车速 + 中性转向参考"""
     speeds = np.linspace(10, 150, 30)
     radii = [calc_steady_state_cornering(vehicle, v, steer_angle_deg=3)["turn_radius_m"]
              for v in speeds]
@@ -201,7 +187,7 @@ def _draw_turn_radius_panel(ax, vehicle):
 
 
 def _draw_step_steer_panel(ax, vehicle):
-    """右下：阶跃转向瞬态响应 + 上升时间 / 超调 / 调节时间"""
+    """阶跃转向瞬态响应 + 上升时间/超调/调节时间"""
     history = simulate_step_steer(vehicle, vx_kmh=80, steer_angle_deg=3, duration_s=3)
 
     times = [h[0] for h in history]

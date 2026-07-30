@@ -92,14 +92,8 @@ car_truck = Vehicle("重型卡车", 15000, 300, drag_coeff=0.65, frontal_area_m2
 
 
 def rolling_coeff_dynamic(speed_ms):
-    """SAE J2263 滑行阻力标准形式：μ(v) = f₀ + f₁·(v/100) + f₄·(v/100)⁴
-    
-    f₀：静态变形阻力（车速=0 时也存在的损耗）
-    f₁：一次项，轮胎迟滞损耗随转速线性增长
-    f₄：四次项，高速驻波效应，100km/h 以上才抬头
-    系数为乘用车 coast-down 测试典型值
-    """
-    v = speed_ms * 3.6            # m/s → km/h，SAE 标准用 100km/h 归一化
+    """SAE J2263 滑行阻力: μ(v) = f₀ + f₁·(v/100) + f₄·(v/100)⁴"""
+    v = speed_ms * 3.6            # m/s → km/h
     f0 = 0.010                    # 截距项
     f1 = 0.005                    # 速度一次项
     f4 = 0.002                    # 速度四次项
@@ -107,11 +101,7 @@ def rolling_coeff_dynamic(speed_ms):
 
 
 def calc_resistance(vehicle, speed_ms, dynamic_rr=False):
-    """计算车辆在给定速度下的总阻力（N）
-    
-    dynamic_rr=False: 使用常量滚动阻力系数（0.015）
-    dynamic_rr=True:  使用 SAE J2263 二次模型动态计算
-    """
+    """计算总阻力(N): 滚动阻力 + 空气阻力, dynamic_rr 切换 SAE J2263 动态模型"""
     # 滚动阻力：F = μ × m × g
     if dynamic_rr:
         coeff = rolling_coeff_dynamic(speed_ms)
@@ -177,33 +167,21 @@ def calc_braking_distance(speed_kmh, friction_coeff=0.7, reaction_time=1.5):
 
 
 def calc_grade_power(vehicle, speed_ms, grade_percent=5):
-    """计算爬坡功率（W）
-    
-    爬坡阻力 F = m × g × sin(θ)，sin(θ) ≈ grade_percent / 100
-    功率 P = F × v
-    """
+    """爬坡功率: m·g·sin(θ)·v (W)"""
     grade_rad = math.atan(grade_percent / 100)
     grade_force = vehicle.mass * 9.8 * math.sin(grade_rad)
     return grade_force * speed_ms
 
 
 def calc_power_to_weight(vehicle):
-    """计算比功率（W/kg 和 kW/ton）
-
-    比功率 = 发动机最大功率 / 整车质量
-    """
+    """比功率 = 发动机最大功率 / 整车质量 (W/kg)"""
     watt_per_kg = vehicle.power / vehicle.mass
     kw_per_ton = watt_per_kg  # W/kg == kW/ton（因为 1 kW / 1000 kg = 1 W/kg）
     return watt_per_kg, kw_per_ton
 
 
 def calc_aero_drag_power(vehicle, speed_ms):
-    """计算风阻功率（W）
-    
-    风阻 F = 0.5 × ρ × Cd × A × v²
-    功率 P = F × v = 0.5 × ρ × Cd × A × v³
-    风阻功率与速度的立方成正比，高速时是主要阻力来源
-    """
+    """风阻功率 0.5·ρ·Cd·A·v³ (W)"""
     aero_force = 0.5 * 1.225 * vehicle.cd * vehicle.area * speed_ms ** 2
     return aero_force * speed_ms
 

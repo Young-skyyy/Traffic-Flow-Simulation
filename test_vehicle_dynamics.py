@@ -52,9 +52,7 @@ def truck():
                    fuel_density_gl=840, fuel_type="diesel")
 
 
-# ============================================================
 # Vehicle class
-# ============================================================
 
 class TestVehicle:
     def test_default_attributes(self, sedan):
@@ -92,9 +90,7 @@ class TestVehicle:
         assert g_low <= g_high  # higher speed, higher gear
 
 
-# ============================================================
 # calc_resistance
-# ============================================================
 
 class TestCalcResistance:
     def test_rolling_resistance_zero_speed(self, sedan):
@@ -162,9 +158,7 @@ class TestDynamicRollingResistance:
         assert r1 == r2
 
 
-# ============================================================
 # calc_braking_distance
-# ============================================================
 
 class TestBrakingDistance:
     def test_braking_formula(self):
@@ -197,9 +191,7 @@ class TestBrakingDistance:
         assert td == 0
 
 
-# ============================================================
 # _interpolate_bsfc (bilinear interpolation on BSFC map)
-# ============================================================
 
 class TestInterpolateBSFC:
     def test_returns_float(self):
@@ -251,9 +243,7 @@ class TestInterpolateBSFC:
         assert mid < high
 
 
-# ============================================================
 # _calc_l100_raw (fuel consumption per 100km)
-# ============================================================
 
 class TestFuelConsumption:
     def test_zero_speed(self, sedan):
@@ -277,9 +267,7 @@ class TestFuelConsumption:
         assert fuel_truck > fuel_sedan
 
 
-# ============================================================
 # get_wltc_profile
-# ============================================================
 
 class TestWLTCProfile:
     def test_returns_correct_length(self):
@@ -306,9 +294,7 @@ class TestWLTCProfile:
             assert isinstance(v, (int, float))
 
 
-# ============================================================
 # calc_acceleration — F = ma physics
-# ============================================================
 
 class TestAcceleration:
     def test_zero_at_standstill(self, sedan):
@@ -337,9 +323,7 @@ class TestAcceleration:
         assert acc_sedan > acc_truck
 
 
-# ============================================================
 # 爬坡功率、比功率、风阻功率
-# ============================================================
 
 class TestGradePower:
     """calc_grade_power — 爬坡功率"""
@@ -412,9 +396,7 @@ class TestAeroDragPower:
         assert calc_aero_drag_power(sedan, v) == pytest.approx(expected, rel=1e-6)
 
 
-# ============================================================
 # 真实车型参数验证 — 用已知油耗反推模型合理性
-# ============================================================
 
 class TestRealWorldBenchmarks:
     """对照真实车型公告油耗，验证仿真模型不偏离物理实际。"""
@@ -459,9 +441,7 @@ class TestRealWorldBenchmarks:
         assert bsfc < 350, f"BSFC {bsfc:.0f} > 350，发动机效率异常"
 
 
-# ============================================================
 # WLTC 工况数据质量验证
-# ============================================================
 
 class TestWLTCDataQuality:
     """WLTC Class 3 工况数据应满足法规定义的特征。"""
@@ -500,9 +480,7 @@ class TestWLTCDataQuality:
         assert idle_count > 50, f"仅 {idle_count} 个怠速点，停车次数不足"
 
 
-# ============================================================
 # 横向动力学 — 自行车模型测试
-# ============================================================
 
 @pytest.fixture
 def lat_sedan():
