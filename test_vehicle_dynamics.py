@@ -16,6 +16,8 @@ from vehicle import (
     simulate_acceleration,
     calc_power_breakdown,
     calc_braking_table,
+    calc_wheel_force,
+    get_engine_torque,
     idm_acceleration,
     car_following_simulation,
     acc_simulation,
@@ -309,29 +311,83 @@ class TestWLTCProfile:
 
 class TestAcceleration:
     def test_zero_at_standstill(self, sedan):
-        """At v=0 power/speed division returns 0, acceleration should be 0."""
+        """v=0 时轮端驱动力为 0，加速度应为 0。"""
         acc = calc_acceleration(sedan, 0)
         assert acc == 0
 
     def test_decreases_with_speed(self, sedan):
-        """At 30 m/s vs 15 m/s: higher aero drag + same power → lower accel."""
+        """高速时空气阻力增大 + 高挡扭矩降低 → 加速度下降。"""
         acc_low = calc_acceleration(sedan, 15)   # 54 km/h
         acc_high = calc_acceleration(sedan, 30)  # 108 km/h
         assert acc_high < acc_low
 
-    def test_net_force_matches_physics(self, sedan):
-        """F_net = P/v - resistance, then a = F_net / m."""
-        v = 20  # m/s
-        resistance = calc_resistance(sedan, v)
-        drive_force = sedan.power / v  # P = F × v
-        expected_acc = max(0, (drive_force - resistance) / sedan.mass)
-        assert calc_acceleration(sedan, v) == pytest.approx(expected_acc, rel=1e-6)
+    def test_torque_curve_based_not_p_over_v(self, sedan):
+        """扭矩曲线模型 vs P=Fv：验证不再用功率/速度简单公式。"""
+        v = 20  # m/s, 72 km/h
+        # P=Fv 模型：100kW/20m/s = 5000N 驱动力
+        # 扭矩曲线模型应显著低于 P=Fv（发动机非恒定功率）
+        acc = calc_acceleration(sedan, v)
+        # 72km/h 时普通轿车加速度应 < 3 m/s²（P=Fv 给 ~3.1）
+        assert 0.2 < acc < 3.0, f"加速度 {acc:.2f} 偏离合理范围"
 
     def test_heavier_slower(self, sedan, truck):
-        """A 15-ton truck has much lower acceleration than 1.5-ton sedan."""
+        """15 吨卡车比 1.5 吨轿车加速慢。"""
         acc_sedan = calc_acceleration(sedan, 10)
         acc_truck = calc_acceleration(truck, 10)
         assert acc_sedan > acc_truck
+
+    def test_throttle_partial_lower_than_full(self, sedan):
+        """半油门加速应 < 全油门。"""
+        acc_wot = calc_acceleration(sedan, 15, throttle=1.0)
+        acc_part = calc_acceleration(sedan, 15, throttle=0.5)
+        assert acc_wot > acc_part
+
+
+class TestWheelForce:
+    """calc_wheel_force — 发动机扭矩 → 轮端驱动力"""
+
+    def test_low_speed_positive(self, sedan):
+        force = calc_wheel_force(sedan, 8, throttle=1.0)
+        assert force > 0, "应有驱动力"
+
+    def test_zero_speed_zero_force(self, sedan):
+        assert calc_wheel_force(sedan, 0) == 0.0
+
+    def test_partial_throttle_lower_force(self, sedan):
+        f_wot = calc_wheel_force(sedan, 10, throttle=1.0)
+        f_part = calc_wheel_force(sedan, 10, throttle=0.3)
+        assert f_part < f_wot
+
+    def test_gear_override_works(self, sedan):
+        """强制 1 档 vs 自动选档应有不同驱动力"""
+        f_auto = calc_wheel_force(sedan, 15)  # 15 m/s=54 km/h, 自动选高档
+        f_g1 = calc_wheel_force(sedan, 15, gear_override=1)
+        # 1 档扭矩放大更大
+        assert f_g1 > f_auto
+
+
+class TestEngineTorque:
+    """get_engine_torque — 扭矩曲线查表"""
+
+    def test_wot_at_peak_rpm(self, sedan):
+        tq = get_engine_torque(3500, 1.0, sedan.torque_curve)
+        assert tq == pytest.approx(sedan.max_torque, rel=0.05)
+
+    def test_idle_low_torque(self, sedan):
+        tq = get_engine_torque(sedan.idle_rpm, 1.0, sedan.torque_curve)
+        assert tq < sedan.max_torque * 0.5
+
+    def test_throttle_scales_linearly(self, sedan):
+        tq_full = get_engine_torque(3000, 1.0, sedan.torque_curve)
+        tq_half = get_engine_torque(3000, 0.5, sedan.torque_curve)
+        assert tq_half == pytest.approx(tq_full * 0.5, rel=0.01)
+
+    def test_clamped_at_bounds(self, sedan):
+        """超范围 RPM 应被钳制，不应崩溃"""
+        tq_low = get_engine_torque(100, 1.0, sedan.torque_curve)
+        tq_high = get_engine_torque(20000, 1.0, sedan.torque_curve)
+        assert tq_low > 0
+        assert tq_high > 0
 
 
 # 爬坡功率、比功率、风阻功率

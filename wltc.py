@@ -8,7 +8,7 @@ from __future__ import annotations
 import math
 
 from _constants import G, KMH_TO_MS, MS_TO_KMH, SECONDS_PER_HOUR, SECONDS_PER_MINUTE
-from vehicle import Vehicle, calc_resistance
+from vehicle import Vehicle, calc_resistance, get_engine_torque
 from bsfc import _interpolate_bsfc, _calc_l100_raw, calc_fuel_consumption
 
 
@@ -197,7 +197,7 @@ def simulate_transient_cycle(vehicle: Vehicle, cycle: list | None = None,
             engine_rpm = max(vehicle.idle_rpm,
                              speed / (2 * math.pi * vehicle.wheel_radius) * total_ratio * 60)
             resistance = calc_resistance(vehicle, max(speed, 0.1))
-            engine_torque = throttle * vehicle.max_torque
+            engine_torque = get_engine_torque(engine_rpm, throttle, vehicle.torque_curve)
             wheel_torque = engine_torque * total_ratio * vehicle.trans_efficiency
             wheel_force = wheel_torque / vehicle.wheel_radius
 
@@ -374,7 +374,7 @@ def simulate_wltc(vehicle: Vehicle, dt: float = 0.2,
             engine_rpm = max(vehicle.idle_rpm,
                              speed / (2 * math.pi * vehicle.wheel_radius) * total_ratio * 60)
             resistance = calc_resistance(vehicle, max(speed, 0.1))
-            engine_torque = throttle * vehicle.max_torque
+            engine_torque = get_engine_torque(engine_rpm, throttle, vehicle.torque_curve)
             wheel_torque = engine_torque * total_ratio * vehicle.trans_efficiency
             wheel_force = wheel_torque / vehicle.wheel_radius
             if brake > 0:

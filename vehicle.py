@@ -10,6 +10,60 @@ import math
 from _constants import G, RHO_AIR, KMH_TO_MS, MS_TO_KMH, DEFAULT_ROLLING_COEFF
 
 
+# ---- 发动机外特性扭矩曲线 ----
+
+# 归一化扭矩曲线（以最大扭矩为 1.0），参考典型 2.0L NA 汽油机
+_NORMALIZED_TORQUE = {
+    800: 0.30, 1000: 0.50, 1500: 0.70, 2000: 0.86,
+    2500: 0.93, 3000: 0.97, 3500: 1.00, 4000: 0.99,
+    4500: 0.95, 5000: 0.88, 5500: 0.78, 6000: 0.67,
+}
+
+
+def _make_default_torque_curve(max_torque_nm: float, idle_rpm: float = 800,
+                                max_rpm: float = 6000) -> dict[int, float]:
+    """从归一化曲线 + 最大扭矩生成外特性扭矩曲线 (rpm → Nm)。"""
+    curve = {}
+    for rpm, ratio in _NORMALIZED_TORQUE.items():
+        if idle_rpm <= rpm <= max_rpm:
+            curve[rpm] = round(ratio * max_torque_nm, 1)
+    # 确保怠速和红线在曲线里
+    if idle_rpm not in curve:
+        curve[idle_rpm] = round(0.30 * max_torque_nm, 1)
+    if max_rpm not in curve:
+        curve[max_rpm] = round(0.67 * max_torque_nm, 1)
+    return dict(sorted(curve.items()))
+
+
+def _interp_torque_curve(rpm: float, curve: dict[int, float]) -> float:
+    """在扭矩曲线中线性插值，返回对应转速的扭矩 (Nm)。"""
+    rpms = list(curve.keys())
+    if rpm <= rpms[0]:
+        return curve[rpms[0]]
+    if rpm >= rpms[-1]:
+        return curve[rpms[-1]]
+    for i in range(len(rpms) - 1):
+        if rpms[i] <= rpm <= rpms[i + 1]:
+            t = (rpm - rpms[i]) / (rpms[i + 1] - rpms[i])
+            return curve[rpms[i]] + t * (curve[rpms[i + 1]] - curve[rpms[i]])
+    return curve[rpms[-1]]  # fallback
+
+
+def get_engine_torque(rpm: float, throttle: float,
+                      torque_curve: dict[int, float]) -> float:
+    """返回发动机在当前转速和油门开度下的输出扭矩 (Nm)。
+
+    Args:
+        rpm:          发动机转速
+        throttle:     油门开度 0~1
+        torque_curve: 外特性扭矩曲线 {rpm: torque_Nm}
+    """
+    rpms = list(torque_curve.keys())
+    rpm = max(rpms[0], min(rpm, rpms[-1]))
+    max_tq = _interp_torque_curve(rpm, torque_curve)
+    return max(0.0, throttle * max_tq)
+
+
 class Vehicle:
     """一辆车的物理参数 + 动力总成参数"""
 
@@ -28,6 +82,7 @@ class Vehicle:
                  trans_efficiency: float = 0.90,
                  fuel_density_gl: float = 740,
                  fuel_type: str = "gasoline",
+                 torque_curve: dict[int, float] | None = None,
                  # 横向动力学参数
                  wheelbase_m: float | None = None,
                  cg_to_front_m: float | None = None,
@@ -50,6 +105,11 @@ class Vehicle:
         self.trans_efficiency: float = trans_efficiency  # 传动效率
         self.fuel_density: float = fuel_density_gl   # 燃油密度（g/L），汽油 740，柴油 840
         self.fuel_type: str = fuel_type
+        # 发动机外特性扭矩曲线 {rpm: Nm}，未提供时根据 max_torque 自动生成
+        self.torque_curve: dict[int, float] = (
+            torque_curve or
+            _make_default_torque_curve(max_torque_nm, idle_rpm, max_rpm)
+        )
         # 横向动力学参数
         self.wheelbase: float = wheelbase_m or 2.65          # 轴距（m），典型轿车
         self.cg_to_front: float = cg_to_front_m or self.wheelbase * 0.45  # 质心到前轴距离（m）
@@ -132,32 +192,79 @@ def calc_resistance(vehicle: Vehicle, speed_ms: float, dynamic_rr: bool = False)
     return rolling + aero
 
 
-def calc_acceleration(vehicle: Vehicle, speed_ms: float) -> float:
-    """计算车辆在当前速度下的加速度（m/s²）"""
+def calc_wheel_force(vehicle: Vehicle, speed_ms: float,
+                     throttle: float = 1.0,
+                     gear_override: int = 0) -> float:
+    """计算轮端驱动力 (N)：发动机扭矩 → 变速箱 → 主减速器 → 车轮。
+
+    Args:
+        vehicle:      车辆对象
+        speed_ms:     当前车速 (m/s)
+        throttle:     油门开度 0~1，默认 1.0（全油门）
+        gear_override: 强制档位，0 = 自动选档
+    """
+    if speed_ms <= 0.1:
+        return 0.0
+
+    speed_kmh = speed_ms * MS_TO_KMH
+    gear = gear_override if gear_override > 0 else vehicle.select_gear(speed_kmh)
+    if gear == 0:
+        return 0.0
+
+    gear_ratio = vehicle.gear_ratios[gear - 1]
+    total_ratio = gear_ratio * vehicle.final_drive
+
+    # 发动机转速
+    wheel_rps = speed_ms / (2 * math.pi * vehicle.wheel_radius)
+    engine_rpm = wheel_rps * total_ratio * 60
+
+    # 扭矩查曲线
+    engine_torque = get_engine_torque(engine_rpm, throttle, vehicle.torque_curve)
+
+    # 轮端扭矩和驱动力
+    wheel_torque = engine_torque * total_ratio * vehicle.trans_efficiency
+    return wheel_torque / vehicle.wheel_radius
+
+
+def calc_acceleration(vehicle: Vehicle, speed_ms: float,
+                      throttle: float = 1.0,
+                      gear_override: int = 0) -> float:
+    """计算车辆在当前速度下的加速度（m/s²）。
+
+    基于发动机扭矩曲线 + 变速箱速比，替代原来简化的 P=Fv 模型。
+    """
     resistance = calc_resistance(vehicle, speed_ms)
-    # 驱动力 = 功率 / 速度（P = F × v）
-    force_drive = vehicle.power / speed_ms if speed_ms > 0 else 0
-    # 净力 = 驱动力 - 阻力
-    net_force = force_drive - resistance
-    # F = m × a → a = F / m
-    return max(0, net_force / vehicle.mass)
+    wheel_force = calc_wheel_force(vehicle, speed_ms, throttle, gear_override)
+    net_force = wheel_force - resistance
+    return max(0.0, net_force / vehicle.mass)
 
 
 def simulate_acceleration(vehicle: Vehicle, target_speed_kmh: float = 100,
                           dt: float = 0.1) -> dict:
-    """模拟车辆从 0 加速到目标速度的过程，返回结构化数据。"""
-    target = target_speed_kmh * KMH_TO_MS  # km/h → m/s
-    speed = 1.0  # 从 1 m/s 起步（避免除以零）
+    """模拟车辆从 0 全油门加速到目标速度，含自动换挡。"""
+    target = target_speed_kmh * KMH_TO_MS
+    speed = 1.5  # m/s，~5 km/h 起步
     distance = 0.0
     time_elapsed = 0.0
+    gear = 1
+    shift_rpm = vehicle.max_rpm * 0.92  # 92% 红线换挡
 
     time_series: list[float] = []
     speed_series: list[float] = []
     acc_series: list[float] = []
     dist_series: list[float] = []
 
-    while speed < target and time_elapsed < 120:  # 最长模拟 120 秒
-        acc = calc_acceleration(vehicle, speed)
+    while speed < target and time_elapsed < 120:
+        # 计算当前档位下的发动机转速
+        total_ratio = vehicle.gear_ratios[gear - 1] * vehicle.final_drive
+        wheel_rps = speed / (2 * math.pi * vehicle.wheel_radius)
+        engine_rpm = wheel_rps * total_ratio * 60
+
+        # 到达换挡转速且还有更高档位 → 升档
+        if engine_rpm >= shift_rpm and gear < len(vehicle.gear_ratios):
+            gear += 1
+
+        acc = calc_acceleration(vehicle, speed, throttle=1.0, gear_override=gear)
         speed += acc * dt
         distance += speed * dt
         time_elapsed += dt
