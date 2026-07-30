@@ -6,6 +6,8 @@
 
 import math
 
+from _constants import G, KMH_TO_MS
+
 
 def calc_slip_angles(vehicle, vx_ms, vy_ms, yaw_rate, steer_angle_rad):
     """前后轮侧偏角 αf = (vy+a·r)/vx - δ, αr = (vy-b·r)/vx (rad)"""
@@ -32,8 +34,8 @@ def calc_understeer_gradient(vehicle):
     Cf = vehicle.cornering_stiffness_f
     Cr = vehicle.cornering_stiffness_r
 
-    Wf = m * 9.8 * b / L   # 前轴载荷（N）
-    Wr = m * 9.8 * a / L   # 后轴载荷（N）
+    Wf = m * G * b / L   # 前轴载荷（N）
+    Wr = m * G * a / L   # 后轴载荷（N）
 
     kus_rad_per_g = Wf / Cf - Wr / Cr          # rad/g
     kus_deg_per_g = kus_rad_per_g * 180 / math.pi  # deg/g
@@ -48,8 +50,8 @@ def calc_characteristic_speed(vehicle):
     L = vehicle.wheelbase
     # v_char = sqrt(g·L / Kus)  where Kus in rad/g
     kus_rad, _ = calc_understeer_gradient(vehicle)
-    v_char_ms = math.sqrt(9.8 * L / kus_rad)
-    return v_char_ms * 3.6
+    v_char_ms = math.sqrt(G * L / kus_rad)
+    return v_char_ms / KMH_TO_MS
 
 
 def calc_critical_speed(vehicle):
@@ -62,19 +64,19 @@ def calc_critical_speed(vehicle):
         return float("inf")
     L = vehicle.wheelbase
     kus_rad, _ = calc_understeer_gradient(vehicle)
-    v_crit_ms = math.sqrt(-9.8 * L / kus_rad)
-    return v_crit_ms * 3.6
+    v_crit_ms = math.sqrt(-G * L / kus_rad)
+    return v_crit_ms / KMH_TO_MS
 
 
 def calc_steady_state_cornering(vehicle, vx_kmh, steer_angle_deg):
     """稳态转向响应（定圆/定速）"""
-    vx = vx_kmh / 3.6
+    vx = vx_kmh * KMH_TO_MS
     delta = math.radians(steer_angle_deg)
     L = vehicle.wheelbase
     kus_rad, kus_deg = calc_understeer_gradient(vehicle)
 
     # 稳态横摆角速度
-    r = vx / (L + kus_rad * vx ** 2 / 9.8) * delta  # rad/s
+    r = vx / (L + kus_rad * vx ** 2 / G) * delta  # rad/s
 
     # 侧向加速度
     ay = vx * r  # m/s²
@@ -87,7 +89,7 @@ def calc_steady_state_cornering(vehicle, vx_kmh, steer_angle_deg):
         "speed_kmh": vx_kmh,
         "steer_deg": steer_angle_deg,
         "yaw_rate_deg_s": math.degrees(r),
-        "lateral_acc_g": ay / 9.8,
+        "lateral_acc_g": ay / G,
         "turn_radius_m": radius,
         "kus_deg_per_g": kus_deg,
     }
@@ -99,7 +101,7 @@ def simulate_step_steer(vehicle, vx_kmh, steer_angle_deg, duration_s=5, dt=0.01)
     使用 2-DOF 线性自行车模型，欧拉积分
     状态变量: [vy, r]（侧向速度、横摆角速度）
     """
-    vx = vx_kmh / 3.6
+    vx = vx_kmh * KMH_TO_MS
     delta = math.radians(steer_angle_deg)
     m = vehicle.mass
     Iz = vehicle.yaw_inertia
@@ -127,7 +129,7 @@ def simulate_step_steer(vehicle, vx_kmh, steer_angle_deg, duration_s=5, dt=0.01)
         dvy = (Fyf + Fyr) / m - vx * r
         dr = (a * Fyf - b * Fyr) / Iz
 
-        history.append((t, vy, r, math.degrees(r), vx * r / 9.8))
+        history.append((t, vy, r, math.degrees(r), vx * r / G))
 
         # 欧拉积分
         vy += dvy * dt

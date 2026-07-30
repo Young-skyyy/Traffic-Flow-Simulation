@@ -5,6 +5,7 @@ BSFC 万有特性油耗模型：双线性插值查表 → L/100km
 
 import math
 
+from _constants import KMH_TO_MS, SECONDS_PER_HOUR, SECONDS_PER_MINUTE
 from vehicle import Vehicle, calc_resistance, car_sedan, car_suv, car_truck
 
 
@@ -111,20 +112,20 @@ def _calc_l100_raw(vehicle, speed_kmh):
     gear = vehicle.select_gear(speed_kmh)
     if gear == 0:
         return 0.0
-    speed_ms = speed_kmh / 3.6
+    speed_ms = speed_kmh * KMH_TO_MS
     gear_ratio = vehicle.gear_ratios[gear - 1]
     total_ratio = gear_ratio * vehicle.final_drive
     wheel_rps = speed_ms / (2 * math.pi * vehicle.wheel_radius)
-    engine_rpm = wheel_rps * total_ratio * 60
+    engine_rpm = wheel_rps * total_ratio * SECONDS_PER_MINUTE
     resistance = calc_resistance(vehicle, speed_ms)
     wheel_torque = resistance * vehicle.wheel_radius
     engine_torque = wheel_torque / (total_ratio * vehicle.trans_efficiency)
     load_ratio = max(0.01, min(1.0, engine_torque / vehicle.max_torque))
     bsfc = _interpolate_bsfc(engine_rpm, load_ratio, vehicle.fuel_type)
-    engine_power_kw = engine_torque * engine_rpm * 2 * math.pi / 60 / 1000
-    fuel_mass_rate = bsfc * engine_power_kw / 3600  # g/s
+    engine_power_kw = engine_torque * engine_rpm * 2 * math.pi / SECONDS_PER_MINUTE / 1000
+    fuel_mass_rate = bsfc * engine_power_kw / SECONDS_PER_HOUR  # g/s
     fuel_vol_rate = fuel_mass_rate / vehicle.fuel_density  # L/s
-    return fuel_vol_rate * (360000 / speed_kmh)  # L/100km
+    return fuel_vol_rate * (SECONDS_PER_HOUR * 100 / speed_kmh)  # L/100km
 
 
 def calc_fuel_table():
@@ -140,13 +141,13 @@ def calc_fuel_table():
     for car in cars:
         for v in speeds:
             gear = car.select_gear(v)
-            speed_ms = v / 3.6
+            speed_ms = v * KMH_TO_MS
             gear_ratio = car.gear_ratios[gear - 1] if gear > 0 else 0
             total_ratio = gear_ratio * car.final_drive
 
             if gear > 0:
                 wheel_rps = speed_ms / (2 * math.pi * car.wheel_radius)
-                engine_rpm = wheel_rps * total_ratio * 60
+                engine_rpm = wheel_rps * total_ratio * SECONDS_PER_MINUTE
                 resistance = calc_resistance(car, speed_ms)
                 engine_torque = resistance * car.wheel_radius / (total_ratio * car.trans_efficiency)
                 load_ratio = min(1.0, engine_torque / car.max_torque)

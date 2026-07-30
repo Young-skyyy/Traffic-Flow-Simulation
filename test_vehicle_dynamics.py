@@ -3,6 +3,7 @@
 
 import pytest
 import math
+from _constants import G, RHO_AIR, KMH_TO_MS
 from vehicle import (
     Vehicle,
     calc_resistance,
@@ -96,7 +97,7 @@ class TestCalcResistance:
     def test_rolling_resistance_zero_speed(self, sedan):
         """At v=0, zero aero drag, only rolling."""
         resistance = calc_resistance(sedan, 0)
-        expected_rolling = 0.015 * 1500 * 9.8  # = 220.5 N
+        expected_rolling = 0.015 * 1500 * G  # = 220.5 N
         assert resistance == pytest.approx(expected_rolling, rel=1e-6)
 
     def test_aero_increases_with_speed(self, sedan):
@@ -105,11 +106,11 @@ class TestCalcResistance:
         assert r_high > r_low
 
     def test_aero_drag_formula(self, sedan):
-        """Aero: 0.5 * 1.225 * Cd * A * v^2"""
+        """Aero: 0.5 * RHO_AIR * Cd * A * v^2"""
         v = 20  # m/s
         resistance = calc_resistance(sedan, v)
-        rolling = 0.015 * 1500 * 9.8
-        aero = 0.5 * 1.225 * 0.28 * 2.2 * v ** 2
+        rolling = 0.015 * 1500 * G
+        aero = 0.5 * RHO_AIR * 0.28 * 2.2 * v ** 2
         expected = rolling + aero
         assert resistance == pytest.approx(expected, rel=1e-6)
 
@@ -128,19 +129,19 @@ class TestDynamicRollingResistance:
 
     def test_100kmh_returns_sum(self):
         """v=100 → v/100=1 → f0+f1+f4"""
-        v_ms = 100 / 3.6
+        v_ms = 100 * KMH_TO_MS
         mu = rolling_coeff_dynamic(v_ms)
         assert mu == pytest.approx(0.010 + 0.005 + 0.002, rel=1e-6)
 
     def test_increases_with_speed(self):
-        mu_low = rolling_coeff_dynamic(30 / 3.6)
-        mu_high = rolling_coeff_dynamic(120 / 3.6)
+        mu_low = rolling_coeff_dynamic(30 * KMH_TO_MS)
+        mu_high = rolling_coeff_dynamic(120 * KMH_TO_MS)
         assert mu_high > mu_low
 
     def test_fourth_order_dominates_at_high_speed(self):
         """120km/h 时四次项贡献应显著大于 60km/h"""
-        mu_60 = rolling_coeff_dynamic(60 / 3.6)
-        mu_120 = rolling_coeff_dynamic(120 / 3.6)
+        mu_60 = rolling_coeff_dynamic(60 * KMH_TO_MS)
+        mu_120 = rolling_coeff_dynamic(120 * KMH_TO_MS)
         # 从 60→120，增量主要来自四次项
         assert mu_120 - mu_60 > 0.003
 
@@ -166,8 +167,8 @@ class TestBrakingDistance:
         v = 50  # km/h
         rd, bd, td = calc_braking_distance(v, friction_coeff=0.7, reaction_time=1.5)
 
-        expected_rd = (50 / 3.6) * 1.5
-        expected_bd = (50 / 3.6) ** 2 / (2 * 0.7 * 9.8)
+        expected_rd = (50 * KMH_TO_MS) * 1.5
+        expected_bd = (50 * KMH_TO_MS) ** 2 / (2 * 0.7 * G)
 
         assert rd == pytest.approx(expected_rd, rel=1e-6)
         assert bd == pytest.approx(expected_bd, rel=1e-6)
@@ -392,7 +393,7 @@ class TestAeroDragPower:
 
     def test_formula_correct(self, sedan):
         v = 25  # m/s = 90 km/h
-        expected = 0.5 * 1.225 * sedan.cd * sedan.area * v ** 3
+        expected = 0.5 * RHO_AIR * sedan.cd * sedan.area * v ** 3
         assert calc_aero_drag_power(sedan, v) == pytest.approx(expected, rel=1e-6)
 
 
@@ -430,11 +431,11 @@ class TestRealWorldBenchmarks:
         gear = sedan.select_gear(v)
         assert gear > 0, "60 km/h 档位应为正"
         # 通过 calc_resistance 反算发动机扭矩
-        resistance = calc_resistance(sedan, v / 3.6)
+        resistance = calc_resistance(sedan, v * KMH_TO_MS)
         total_ratio = sedan.gear_ratios[gear - 1] * sedan.final_drive
         engine_torque = resistance * sedan.wheel_radius / (total_ratio * sedan.trans_efficiency)
         load = max(0.01, min(1.0, engine_torque / sedan.max_torque))
-        wheel_rps = (v / 3.6) / (2 * math.pi * sedan.wheel_radius)
+        wheel_rps = (v * KMH_TO_MS) / (2 * math.pi * sedan.wheel_radius)
         engine_rpm = wheel_rps * total_ratio * 60
         bsfc = _interpolate_bsfc(engine_rpm, load, sedan.fuel_type)
         # 60 km/h 巡航时发动机应运行在经济区 (BSFC < 350)
@@ -470,7 +471,7 @@ class TestWLTCDataQuality:
     def test_total_distance_approx_20km(self):
         """WLTC 工况总里程约 20 km（插值覆盖限制）。"""
         profile = get_wltc_profile()
-        total_dist = sum(v / 3.6 for v in profile) / 1000  # 每 1 秒积分
+        total_dist = sum(v * KMH_TO_MS for v in profile) / 1000  # 每 1 秒积分
         assert 18 < total_dist < 23, f"总里程 {total_dist:.1f}km 偏离合理范围"
 
     def test_idle_stops_exist(self):

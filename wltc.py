@@ -5,6 +5,7 @@ WLTC 瞬态油耗仿真：加速加浓、减速断油(DFCO)、怠速油耗
 
 import math
 
+from _constants import G, KMH_TO_MS, MS_TO_KMH, SECONDS_PER_HOUR, SECONDS_PER_MINUTE
 from vehicle import Vehicle, calc_resistance
 from bsfc import _interpolate_bsfc, _calc_l100_raw, calc_fuel_consumption
 
@@ -97,7 +98,7 @@ def get_wltc_summary():
     for name, start, end in phases:
         seg = profile[start:end + 1]
         max_v = max(seg)
-        dist_km = sum(v / 3.6 for v in seg) / 1000
+        dist_km = sum(v * KMH_TO_MS for v in seg) / 1000
         total_dist += dist_km
         phase_list.append({
             "name": name,
@@ -136,7 +137,7 @@ def simulate_transient_cycle(vehicle, cycle=None, dt=0.1, verbose=True):
     # 构建逐秒目标车速序列
     targets = []
     for _, duration, target_kmh in cycle:
-        targets.extend([target_kmh / 3.6] * int(duration / dt))
+        targets.extend([target_kmh * KMH_TO_MS] * int(duration / dt))
 
     if verbose:
         print(f"\n{'='*95}")
@@ -155,7 +156,7 @@ def simulate_transient_cycle(vehicle, cycle=None, dt=0.1, verbose=True):
     for step in range(steps):
         sim_time = step * dt
         target_speed = targets[min(step, len(targets) - 1)]
-        target_kmh = target_speed * 3.6
+        target_kmh = target_speed * MS_TO_KMH
 
         # ---- 驾驶员模型 (P 控制器) ----
         speed_error = target_speed - speed
@@ -174,7 +175,7 @@ def simulate_transient_cycle(vehicle, cycle=None, dt=0.1, verbose=True):
                 # 巡航：维持平衡油门
                 resistance = calc_resistance(vehicle, max(speed, 0.1))
                 cruise_torque = resistance * vehicle.wheel_radius
-                gear = vehicle.select_gear(speed * 3.6)
+                gear = vehicle.select_gear(speed * MS_TO_KMH)
                 if gear > 0:
                     total_ratio = vehicle.gear_ratios[gear - 1] * vehicle.final_drive
                     engine_torque_needed = cruise_torque / (total_ratio * vehicle.trans_efficiency)
@@ -187,7 +188,7 @@ def simulate_transient_cycle(vehicle, cycle=None, dt=0.1, verbose=True):
         if throttle > 0.05 and speed < 1:
             gear = 1  # 起步强制 1 档
         else:
-            gear = vehicle.select_gear(speed * 3.6)
+            gear = vehicle.select_gear(speed * MS_TO_KMH)
         if gear > 0:
             total_ratio = vehicle.gear_ratios[gear - 1] * vehicle.final_drive
             engine_rpm = max(vehicle.idle_rpm,
@@ -199,7 +200,7 @@ def simulate_transient_cycle(vehicle, cycle=None, dt=0.1, verbose=True):
 
             # 制动力
             if brake > 0:
-                brake_force = brake * vehicle.mass * 9.8 * 0.8  # 最大减速度 0.8g
+                brake_force = brake * vehicle.mass * G * 0.8  # 最大减速度 0.8g
                 wheel_force -= brake_force
 
             net_force = wheel_force - resistance
@@ -208,7 +209,7 @@ def simulate_transient_cycle(vehicle, cycle=None, dt=0.1, verbose=True):
             engine_rpm = vehicle.idle_rpm
             acceleration = 0
             if brake > 0:
-                acceleration = -brake * 9.8 * 0.8
+                acceleration = -brake * G * 0.8
 
         # 更新速度
         speed = max(0, speed + acceleration * dt)
@@ -225,13 +226,13 @@ def simulate_transient_cycle(vehicle, cycle=None, dt=0.1, verbose=True):
                 bsfc *= enrich_factor
 
             engine_power_kw = engine_torque * engine_rpm * 2 * math.pi / 60 / 1000
-            fuel_mass_rate = bsfc * engine_power_kw / 3600  # g/s
+            fuel_mass_rate = bsfc * engine_power_kw / SECONDS_PER_HOUR  # g/s
             fuel_vol_rate = fuel_mass_rate / vehicle.fuel_density  # L/s
             total_fuel_L += fuel_vol_rate * dt
 
             # 瞬时百公里油耗
             if speed > 0.1:
-                inst_l100 = fuel_vol_rate * (360000 / (speed * 3.6))
+                inst_l100 = fuel_vol_rate * (SECONDS_PER_HOUR * 100 / (speed * MS_TO_KMH))
             else:
                 inst_l100 = 0
         else:
@@ -243,9 +244,9 @@ def simulate_transient_cycle(vehicle, cycle=None, dt=0.1, verbose=True):
                 # 怠速油耗
                 bsfc = _interpolate_bsfc(vehicle.idle_rpm, 0.05, vehicle.fuel_type)
                 idle_power = vehicle.idle_rpm * vehicle.max_torque * 0.05 * 2 * math.pi / 60 / 1000
-                fuel_rate = bsfc * idle_power / 3600 / vehicle.fuel_density
+                fuel_rate = bsfc * idle_power / SECONDS_PER_HOUR / vehicle.fuel_density
                 total_fuel_L += fuel_rate * dt
-                inst_l100 = 99.9 if speed < 0.5 else fuel_rate * (360000 / (speed * 3.6))
+                inst_l100 = 99.9 if speed < 0.5 else fuel_rate * (SECONDS_PER_HOUR * 100 / (speed * MS_TO_KMH))
 
         # ---- 稳态估算（仅目标车速变化时记录一次 BSFC 查表值） ----
         if abs(target_kmh - steady_last_speed) > 2:
@@ -265,7 +266,7 @@ def simulate_transient_cycle(vehicle, cycle=None, dt=0.1, verbose=True):
     steady_total = 0
     for phase_name, duration, target_kmh in cycle:
         if target_kmh > 0:
-            seg_dist = target_kmh / 3.6 * duration / 1000  # km
+            seg_dist = target_kmh * KMH_TO_MS * duration / 1000  # km
             steady_total += calc_fuel_consumption(vehicle, target_kmh, seg_dist)
 
     avg_L100 = total_fuel_L / (distance / 100000) if distance > 0 else 0
@@ -332,7 +333,7 @@ def simulate_wltc(vehicle, dt=0.2, verbose=True):
         if t_idx >= len(wltc):
             break
         target_kmh = wltc[t_idx]
-        target_speed = target_kmh / 3.6
+        target_speed = target_kmh * KMH_TO_MS
 
         # ---- 驾驶员模型 ----
         speed_error = target_speed - speed
@@ -349,7 +350,7 @@ def simulate_wltc(vehicle, dt=0.2, verbose=True):
             else:
                 resistance = calc_resistance(vehicle, max(speed, 0.1))
                 cruise_tq = resistance * vehicle.wheel_radius
-                g = vehicle.select_gear(speed * 3.6)
+                g = vehicle.select_gear(speed * MS_TO_KMH)
                 if g > 0:
                     ratio = vehicle.gear_ratios[g - 1] * vehicle.final_drive
                     tq = cruise_tq / (ratio * vehicle.trans_efficiency)
@@ -362,7 +363,7 @@ def simulate_wltc(vehicle, dt=0.2, verbose=True):
         if throttle > 0.05 and speed < 1:
             gear = 1
         else:
-            gear = vehicle.select_gear(speed * 3.6)
+            gear = vehicle.select_gear(speed * MS_TO_KMH)
 
         if gear > 0:
             total_ratio = vehicle.gear_ratios[gear - 1] * vehicle.final_drive
@@ -373,14 +374,14 @@ def simulate_wltc(vehicle, dt=0.2, verbose=True):
             wheel_torque = engine_torque * total_ratio * vehicle.trans_efficiency
             wheel_force = wheel_torque / vehicle.wheel_radius
             if brake > 0:
-                wheel_force -= brake * vehicle.mass * 9.8 * 0.8
+                wheel_force -= brake * vehicle.mass * G * 0.8
             net_force = wheel_force - resistance
             acceleration = net_force / vehicle.mass
         else:
             engine_rpm = vehicle.idle_rpm
             acceleration = 0
             if brake > 0:
-                acceleration = -brake * 9.8 * 0.8
+                acceleration = -brake * G * 0.8
 
         speed = max(0, speed + acceleration * dt)
         distance += speed * dt
@@ -394,10 +395,10 @@ def simulate_wltc(vehicle, dt=0.2, verbose=True):
             if acceleration > 0.1:
                 bsfc *= 1.0 + min(0.35, acceleration * 0.5)
             power_kw = engine_torque * engine_rpm * 2 * math.pi / 60 / 1000
-            fuel_rate = bsfc * power_kw / 3600 / vehicle.fuel_density
+            fuel_rate = bsfc * power_kw / SECONDS_PER_HOUR / vehicle.fuel_density
             total_fuel_L += fuel_rate * dt
             if speed > 0.1:
-                inst_l100 = fuel_rate * (360000 / (speed * 3.6))
+                inst_l100 = fuel_rate * (SECONDS_PER_HOUR * 100 / (speed * MS_TO_KMH))
 
             # 工况分类统计
             if acceleration > 0.2:
@@ -413,10 +414,10 @@ def simulate_wltc(vehicle, dt=0.2, verbose=True):
             else:
                 bsfc = _interpolate_bsfc(vehicle.idle_rpm, 0.05, vehicle.fuel_type)
                 idle_power = vehicle.idle_rpm * vehicle.max_torque * 0.05 * 2 * math.pi / 60 / 1000
-                fuel_rate = bsfc * idle_power / 3600 / vehicle.fuel_density
+                fuel_rate = bsfc * idle_power / SECONDS_PER_HOUR / vehicle.fuel_density
                 total_fuel_L += fuel_rate * dt
                 idle_fuel += fuel_rate * dt
-                inst_l100 = 99.9 if speed < 0.5 else fuel_rate * (360000 / (speed * 3.6))
+                inst_l100 = 99.9 if speed < 0.5 else fuel_rate * (SECONDS_PER_HOUR * 100 / (speed * MS_TO_KMH))
 
         # 按阶段累计
         if t_idx < 590:
@@ -449,7 +450,7 @@ def simulate_wltc(vehicle, dt=0.2, verbose=True):
         v = wltc[t] if t < len(wltc) else 0
         if v > 0.5:
             l100 = _calc_l100_raw(vehicle, v)
-            dist_km = v / 3600  # 1秒行驶的公里数
+            dist_km = v / SECONDS_PER_HOUR  # 1秒行驶的公里数
             steady_total += l100 * dist_km / 100
 
     avg_L100 = total_fuel_L / (distance / 100000) if distance > 0 else 0

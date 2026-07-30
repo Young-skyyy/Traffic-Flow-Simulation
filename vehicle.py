@@ -5,6 +5,8 @@
 
 import math
 
+from _constants import G, RHO_AIR, KMH_TO_MS, MS_TO_KMH, DEFAULT_ROLLING_COEFF
+
 
 class Vehicle:
     """一辆车的物理参数 + 动力总成参数"""
@@ -22,7 +24,7 @@ class Vehicle:
         self.power = power_kw * 1000          # 发动机功率（W）
         self.cd = drag_coeff
         self.area = frontal_area_m2
-        self.rolling_coeff = 0.015
+        self.rolling_coeff = DEFAULT_ROLLING_COEFF
         # 动力总成参数
         self.max_torque = max_torque_nm       # 发动机最大扭矩（Nm）
         self.idle_rpm = idle_rpm
@@ -47,7 +49,7 @@ class Vehicle:
         """根据车速选择合适档位（简化的经济性换挡策略）"""
         if speed_kmh <= 0:
             return 0
-        speed_ms = speed_kmh / 3.6
+        speed_ms = speed_kmh * KMH_TO_MS
         # 目标发动机转速 1500-2500 RPM 为经济区间
         target_rpm = 2000
         best_gear = 1
@@ -93,7 +95,7 @@ car_truck = Vehicle("重型卡车", 15000, 300, drag_coeff=0.65, frontal_area_m2
 
 def rolling_coeff_dynamic(speed_ms):
     """SAE J2263 滑行阻力: μ(v) = f₀ + f₁·(v/100) + f₄·(v/100)⁴"""
-    v = speed_ms * 3.6            # m/s → km/h
+    v = speed_ms * MS_TO_KMH            # m/s → km/h
     f0 = 0.010                    # 截距项
     f1 = 0.005                    # 速度一次项
     f4 = 0.002                    # 速度四次项
@@ -108,10 +110,10 @@ def calc_resistance(vehicle, speed_ms, dynamic_rr=False):
     else:
         coeff = vehicle.rolling_coeff
 
-    rolling = coeff * vehicle.mass * 9.8
+    rolling = coeff * vehicle.mass * G
 
-    # 空气阻力：F = 0.5 × ρ × Cd × A × v²（ρ=空气密度1.225）
-    aero = 0.5 * 1.225 * vehicle.cd * vehicle.area * speed_ms ** 2
+    # 空气阻力：F = 0.5 × ρ × Cd × A × v²
+    aero = 0.5 * RHO_AIR * vehicle.cd * vehicle.area * speed_ms ** 2
 
     return rolling + aero
 
@@ -140,7 +142,7 @@ def simulate_acceleration(vehicle, target_speed_kmh=100, dt=0.1):
             "total_dist_m": float      总行驶距离,
         }
     """
-    target = target_speed_kmh / 3.6  # km/h → m/s
+    target = target_speed_kmh * KMH_TO_MS  # km/h → m/s
     speed = 1.0  # 从 1 m/s 起步（避免除以零）
     distance = 0
     time_elapsed = 0
@@ -157,7 +159,7 @@ def simulate_acceleration(vehicle, target_speed_kmh=100, dt=0.1):
         time_elapsed += dt
 
         time_series.append(round(time_elapsed, 2))
-        speed_series.append(round(speed * 3.6, 2))
+        speed_series.append(round(speed * MS_TO_KMH, 2))
         acc_series.append(round(acc, 4))
         dist_series.append(round(distance, 2))
 
@@ -173,13 +175,13 @@ def simulate_acceleration(vehicle, target_speed_kmh=100, dt=0.1):
 
 def calc_braking_distance(speed_kmh, friction_coeff=0.7, reaction_time=1.5):
     """计算制动总距离 = 反应距离 + 制动距离"""
-    speed_ms = speed_kmh / 3.6
+    speed_ms = speed_kmh * KMH_TO_MS
 
     # 反应距离 = 速度 × 反应时间
     reaction_dist = speed_ms * reaction_time
 
-    # 制动距离 = v² / (2 × μ × g)（物理公式，μ=路面摩擦系数）
-    braking_dist = speed_ms ** 2 / (2 * friction_coeff * 9.8)
+    # 制动距离 = v² / (2 × μ × g)
+    braking_dist = speed_ms ** 2 / (2 * friction_coeff * G)
 
     total = reaction_dist + braking_dist
     return reaction_dist, braking_dist, total
@@ -188,7 +190,7 @@ def calc_braking_distance(speed_kmh, friction_coeff=0.7, reaction_time=1.5):
 def calc_grade_power(vehicle, speed_ms, grade_percent=5):
     """爬坡功率: m·g·sin(θ)·v (W)"""
     grade_rad = math.atan(grade_percent / 100)
-    grade_force = vehicle.mass * 9.8 * math.sin(grade_rad)
+    grade_force = vehicle.mass * G * math.sin(grade_rad)
     return grade_force * speed_ms
 
 
@@ -201,7 +203,7 @@ def calc_power_to_weight(vehicle):
 
 def calc_aero_drag_power(vehicle, speed_ms):
     """风阻功率 0.5·ρ·Cd·A·v³ (W)"""
-    aero_force = 0.5 * 1.225 * vehicle.cd * vehicle.area * speed_ms ** 2
+    aero_force = 0.5 * RHO_AIR * vehicle.cd * vehicle.area * speed_ms ** 2
     return aero_force * speed_ms
 
 
@@ -211,10 +213,10 @@ def calc_power_breakdown(vehicle, speed_kmh=100, grade_percent=5):
     Returns:
         dict: 各功率分量（W）及汇总指标
     """
-    speed_ms = speed_kmh / 3.6
+    speed_ms = speed_kmh * KMH_TO_MS
 
-    rolling_power_const = vehicle.rolling_coeff * vehicle.mass * 9.8 * speed_ms
-    rolling_power_dyn = rolling_coeff_dynamic(speed_ms) * vehicle.mass * 9.8 * speed_ms
+    rolling_power_const = vehicle.rolling_coeff * vehicle.mass * G * speed_ms
+    rolling_power_dyn = rolling_coeff_dynamic(speed_ms) * vehicle.mass * G * speed_ms
     aero_power = calc_aero_drag_power(vehicle, speed_ms)
     grade_power = calc_grade_power(vehicle, speed_ms, grade_percent)
     total_resistance_power = rolling_power_const + aero_power + grade_power
@@ -271,8 +273,8 @@ def car_following_simulation(lead_speed_kmh=60, follower_speed_kmh=70,
             "collision_s":    float|None   碰撞时间，无碰撞则为 None,
         }
     """
-    lead_speed = lead_speed_kmh / 3.6
-    follower_speed = follower_speed_kmh / 3.6
+    lead_speed = lead_speed_kmh * KMH_TO_MS
+    follower_speed = follower_speed_kmh * KMH_TO_MS
     dt = 1.0
 
     # 用数值积分累积位置
@@ -308,7 +310,7 @@ def car_following_simulation(lead_speed_kmh=60, follower_speed_kmh=70,
 
         time_series.append(float(t))
         gap_series.append(round(gap, 1))
-        speed_series.append(round(follower_speed * 3.6, 1))
+        speed_series.append(round(follower_speed * MS_TO_KMH, 1))
         status_series.append(status)
 
         if gap <= 0 and collision_time is None:

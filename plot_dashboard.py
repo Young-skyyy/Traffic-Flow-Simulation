@@ -18,6 +18,7 @@ from lateral_dynamics import (
     simulate_step_steer,
 )
 from _plot_utils import setup_chinese_font, get_label
+from _constants import KMH_TO_MS
 
 
 def plot_dashboard(vehicle=None, save_path=None):
@@ -139,7 +140,7 @@ def _draw_steady_cornering_panel(ax, vehicle):
     # 中性转向参考线：r_neutral = vx / L × δ
     L = vehicle.wheelbase
     delta = math.radians(3)
-    r_neutral = [math.degrees((v / 3.6) / L * delta) for v in speeds]
+    r_neutral = [math.degrees((v * KMH_TO_MS) / L * delta) for v in speeds]
     line3, = ax.plot(speeds, r_neutral, color=color3, linewidth=1, linestyle=":",
                      label=get_label("中性转向(参考)"))
 
