@@ -170,9 +170,14 @@ def parse_can_frame(data: list[int], msg_def: dict) -> dict[str, float]:
 # 3. ECU 仿真器
 
 class VehicleECU:
-    """整车 ECU 状态机，维持车辆运行参数随时间连续变化"""
+    """整车 ECU 状态机，维持车辆运行参数随时间连续变化。
 
-    def __init__(self):
+    Args:
+        seed: 随机种子，None = 不可复现，传入 int 可固定仿真结果
+    """
+
+    def __init__(self, seed: int | None = 42):
+        self._rng = random.Random(seed)
         self.rpm = 800                              # 怠速
         self.throttle = 0
         self.speed = 0                              # km/h
@@ -192,11 +197,11 @@ class VehicleECU:
             self.accelerating = False
 
         if self.accelerating:
-            self.throttle = min(80, self.throttle + random.uniform(0, 10) * dt_s)
+            self.throttle = min(80, self.throttle + self._rng.uniform(0, 10) * dt_s)
             self.rpm += int(500 * dt_s)
             self.speed += 3 * dt_s
         else:
-            self.throttle = max(0, self.throttle - random.uniform(5, 15) * dt_s)
+            self.throttle = max(0, self.throttle - self._rng.uniform(5, 15) * dt_s)
             self.rpm -= int(300 * dt_s)
             self.speed = max(0, self.speed - 2 * dt_s)
 
@@ -219,7 +224,7 @@ class VehicleECU:
         else:
             self.gear = 0
 
-        self.brake_pressure = random.uniform(0, 5) if not self.accelerating else 0
+        self.brake_pressure = self._rng.uniform(0, 5) if not self.accelerating else 0
 
 
 # 4. CAN 帧信号生成器 —— 每个 ECU 类型一个独立函数，通过字典 dispatch
