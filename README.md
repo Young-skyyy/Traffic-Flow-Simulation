@@ -1,6 +1,6 @@
-# Vehicle Physics Simulation
+# Vehicle Dynamics Engineering Toolkit — SAE J2263 · BSFC Map · CAN Bus
 
-Python 车辆动力学仿真工具包。覆盖纵向动力学（加速/制动/油耗/功率分解）与横向动力学（自行车模型/不足转向/阶跃瞬态响应），84 条 pytest 测试。
+Python 车辆动力学工程工具包。覆盖纵向动力学（SAE J2263 动态滚动阻力/加速/制动/WLTC油耗/功率分解）与横向动力学（2-DOF自行车模型/不足转向梯度/阶跃瞬态响应），含 5-ECU CAN 总线仿真，84 条 pytest 测试。
 
 ## 项目结构
 
