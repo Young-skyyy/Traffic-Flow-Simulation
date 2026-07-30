@@ -61,8 +61,8 @@ Python 车辆动力学工程工具包。覆盖纵向动力学（SAE J2263 动态
 ### 安装
 
 ```bash
-git clone https://github.com/Young-skyyy/vehicle-physics-sim.git
-cd vehicle-physics-sim
+git clone https://github.com/Young-skyyy/vehicle-dynamics-toolkit.git
+cd vehicle-dynamics-toolkit
 pip install -r requirements.txt
 ```
 
@@ -99,7 +99,7 @@ python plot_dashboard.py
 
 ## 测试
 
-[![pytest](https://github.com/Young-skyyy/vehicle-physics-sim/actions/workflows/test.yml/badge.svg)](https://github.com/Young-skyyy/vehicle-physics-sim/actions/workflows/test.yml)
+[![pytest](https://github.com/Young-skyyy/vehicle-dynamics-toolkit/actions/workflows/test.yml/badge.svg)](https://github.com/Young-skyyy/vehicle-dynamics-toolkit/actions/workflows/test.yml)
 
 84 条单元测试，覆盖核心函数。本地运行：
 
