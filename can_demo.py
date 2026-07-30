@@ -185,57 +185,48 @@ class VehicleECU:
 
 # 4. CAN 总线仿真主循环
 
-def simulate_can_bus(duration_s=5, print_interval_ms=500):
-    """
-    模拟 CAN 总线运行 duration_s 秒。
-    每 print_interval_ms 毫秒打印一次总线快照。
+def simulate_can_bus(duration_s=5):
+    """模拟 CAN 总线运行 duration_s 秒，返回结构化数据。
+
+    Returns:
+        dict: {
+            "duration_s": float,
+            "total_messages": int,
+            "frames": list[dict],
+        }
     """
     veh = VehicleECU()
     dt = 0.01  # 10ms 主循环步长
     total_steps = int(duration_s / dt)
 
-    # 各消息的发送计数器
     timers = {name: 0 for name in CAN_MESSAGES}
-
-    print(f"\nCAN 总线仿真启动（{duration_s}s）\n")
-    print(f"{'时间':>8}  {'ID':>6}  {'消息名称':<16}  {'信号值'}")
-    print("-" * 70)
-
-    last_print = -print_interval_ms / 1000.0
     msg_count = 0
-    pending_prints = []  # 当前打印周期内积攒的消息
+    frames = []
 
     for step in range(total_steps):
         sim_time = step * dt
         veh.update(dt)
 
-        # 检查每条消息是否到发送周期
         for name, msg_def in CAN_MESSAGES.items():
             timers[name] += dt * 1000  # 累计毫秒
             if timers[name] >= msg_def["cycle_ms"]:
                 timers[name] -= msg_def["cycle_ms"]
-
-                # 根据当前车辆状态生成信号值
                 frame_data = generate_frame(name, msg_def, veh, sim_time)
                 parsed = parse_can_frame(frame_data, msg_def)
-
-                # 收集到待打印列表
-                signals_str = ", ".join(
-                    f"{k}={v}{msg_def['signals'][i]['unit']}"
-                    for i, (k, v) in enumerate(parsed.items())
-                    if i < 4
-                )
-                pending_prints.append((sim_time, msg_def['id'], name, signals_str))
+                frames.append({
+                    "time_s": round(sim_time, 4),
+                    "id": msg_def["id"],
+                    "name": name,
+                    "signals": parsed,
+                    "data": frame_data,
+                })
                 msg_count += 1
 
-        # 按打印间隔输出积攒的消息
-        if sim_time - last_print >= print_interval_ms / 1000.0:
-            for t, mid, mname, mstr in pending_prints:
-                print(f"{t:7.2f}s  0x{mid:03X}  {mname:<16}  {mstr}")
-            pending_prints.clear()
-            last_print = sim_time
-
-    print(f"\n总计发送 {msg_count} 条 CAN 帧")
+    return {
+        "duration_s": duration_s,
+        "total_messages": msg_count,
+        "frames": frames,
+    }
 
 
 def generate_frame(name, msg_def, veh, sim_time):
@@ -293,16 +284,22 @@ DTC_DATABASE = {
 
 
 def simulate_dtc_check():
-    """模拟诊断仪读取故障码"""
-    print(f"\nDTC 故障码扫描")
-    print("-" * 40)
+    """模拟诊断仪读取故障码，返回结构化数据。
+
+    Returns:
+        dict: {
+            "active_codes": list[str],
+            "details": list[dict],
+        }
+    """
     active = random.sample(list(DTC_DATABASE.keys()), k=random.randint(0, 2))
-    if not active:
-        print("  无故障码（系统正常）")
-    else:
-        for code in active:
-            dtc = DTC_DATABASE[code]
-            print(f"  {code} | {dtc['ecu']} | {dtc['desc']}")
+    details = [{"code": code, "ecu": DTC_DATABASE[code]["ecu"],
+                "desc": DTC_DATABASE[code]["desc"]} for code in active]
+
+    return {
+        "active_codes": active,
+        "details": details,
+    }
 
 
 # 7. DBC 文件生成器
@@ -356,26 +353,33 @@ def generate_dbc(filepath="simulated_ecu.dbc", baudrate=500000):
 
     with open(filepath, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
-    print(f"[DBC 文件已生成] {filepath} ({len(CAN_MESSAGES)} 条报文, {baudrate//1000}kbps)")
+
+    return {
+        "filepath": filepath,
+        "message_count": len(CAN_MESSAGES),
+        "baudrate": baudrate,
+    }
 
 
 # 8. CAN 总线高级仿真（负载率 + ASC + 错误注入）
 
 def simulate_can_bus_advanced(duration_s=10, baudrate=500000,
                                error_rate=0.001, asc_log="can_log.asc"):
-    """增强版 CAN 仿真: 总线负载统计 + ASC 日志 + 错误帧注入"""
+    """增强版 CAN 仿真: 总线负载统计 + ASC 日志 + 错误帧注入
+
+    Returns:
+        dict: {"total_frames", "error_frames", "avg_load_pct", "bus_load_samples", "dbc_info"}
+    """
     veh = VehicleECU()
     dt = 0.01
     total_steps = int(duration_s / dt)
     timers = {name: 0 for name in CAN_MESSAGES}
 
-    # 负载率统计
     total_bits = 0
     total_frames = 0
     error_frames = 0
-    bus_load_samples = []  # (time, load_pct)
+    bus_load_samples = []
 
-    # ASC 日志
     asc_lines = []
     if asc_log:
         from datetime import datetime
@@ -384,12 +388,6 @@ def simulate_can_bus_advanced(duration_s=10, baudrate=500000,
         asc_lines.append("internal events logged")
         asc_lines.append("// 模拟 ECU: EMS, BMS, ABS, TCU, BCM")
         asc_lines.append("Begin Triggerblock")
-
-    print(f"\n{'='*75}")
-    print(f"  CAN 总线增强仿真 | {baudrate//1000}kbps | {duration_s}s | 错误率 {error_rate:.1%}")
-    print(f"{'='*75}")
-    print(f"{'时间':>7}  {'帧数':>6}  {'负载率':>7}  {'错误':>5}  {'状态'}")
-    print("-" * 50)
 
     last_report = -2.0
     frames_this_window = 0
@@ -431,30 +429,26 @@ def simulate_can_bus_advanced(duration_s=10, baudrate=500000,
         if sim_time - last_report >= 1.0:
             load_pct = (total_bits / baudrate) / (sim_time + 0.001) * 100
             bus_load_samples.append((sim_time, load_pct))
-            status = "正常" if load_pct < 30 else ("注意" if load_pct < 60 else "过载!")
-            print(f"{sim_time:6.1f}s  {frames_this_window:>5}   {load_pct:>5.1f}%  "
-                  f"{error_frames:>4}   {status}")
             frames_this_window = 0
             last_report = sim_time
 
     avg_load = (total_bits / baudrate) / duration_s * 100
-    print(f"\n结果: 总帧数 {total_frames} | 错误帧 {error_frames} | 平均负载 {avg_load:.1f}%")
 
     # 保存 ASC 日志
     if asc_log:
         asc_lines.append("End Triggerblock")
         with open(asc_log, "w", encoding="utf-8") as f:
             f.write("\n".join(asc_lines))
-        print(f"[ASC 日志已导出] {asc_log} ({len(asc_lines)} 行)")
 
-    # 保存 DBC
-    generate_dbc()
+    # 生成 DBC
+    dbc_info = generate_dbc()
 
     return {
         "total_frames": total_frames,
         "error_frames": error_frames,
         "avg_load_pct": avg_load,
         "bus_load_samples": bus_load_samples,
+        "dbc_info": dbc_info,
     }
 
 
@@ -467,7 +461,18 @@ if __name__ == "__main__":
     """)
 
     # 场景 1：CAN 总线增强仿真（负载率 + ASC 日志 + 错误帧 + DBC 生成）
-    simulate_can_bus_advanced(duration_s=10, error_rate=0.002)
+    result = simulate_can_bus_advanced(duration_s=10, error_rate=0.002)
+    print(f"\n  CAN 增强仿真结果: {result['total_frames']} 帧 | "
+          f"错误帧 {result['error_frames']} | 平均负载 {result['avg_load_pct']:.1f}%")
+    dbc = result["dbc_info"]
+    print(f"  DBC 文件: {dbc['filepath']} ({dbc['message_count']} 条报文, {dbc['baudrate']//1000}kbps)")
 
     # 场景 2：DTC 故障码扫描
-    simulate_dtc_check()
+    dtc_result = simulate_dtc_check()
+    print(f"\n  DTC 故障码扫描")
+    print(f"  {'-'*40}")
+    if not dtc_result["active_codes"]:
+        print("    无故障码（系统正常）")
+    else:
+        for d in dtc_result["details"]:
+            print(f"    {d['code']} | {d['ecu']} | {d['desc']}")

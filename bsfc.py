@@ -127,18 +127,16 @@ def _calc_l100_raw(vehicle, speed_kmh):
     return fuel_vol_rate * (360000 / speed_kmh)  # L/100km
 
 
-def show_fuel_table():
-    """BSFC 模型：展示各车速下的档位、转速、负荷和油耗"""
+def calc_fuel_table():
+    """BSFC 模型：各车速下档位、转速、负荷和油耗，返回结构化数据。
+
+    Returns:
+        list[dict]: 每个 (车型, 车速) 组合的油耗明细
+    """
     cars = [car_sedan, car_suv, car_truck]
     speeds = [20, 30, 50, 70, 90, 110, 120]
 
-    print(f"\n{'='*95}")
-    print("  百公里油耗分析（BSFC 万有特性模型）")
-    print(f"{'='*95}")
-    header = f"{'车型':>10}  {'车速':>5}  {'档位':>4}  {'转速':>7}  {'负荷':>6}  {'BSFC':>6}  {'油耗':>6}"
-    print(header)
-    print("-" * 95)
-
+    results = []
     for car in cars:
         for v in speeds:
             gear = car.select_gear(v)
@@ -146,7 +144,6 @@ def show_fuel_table():
             gear_ratio = car.gear_ratios[gear - 1] if gear > 0 else 0
             total_ratio = gear_ratio * car.final_drive
 
-            # 计算运行时参数
             if gear > 0:
                 wheel_rps = speed_ms / (2 * math.pi * car.wheel_radius)
                 engine_rpm = wheel_rps * total_ratio * 60
@@ -159,9 +156,14 @@ def show_fuel_table():
                 engine_rpm, bsfc, l100 = car.idle_rpm, 580, 0
                 load_ratio = 0
 
-            gear_str = f"{gear}档" if gear > 0 else "空档"
-            print(f"{car.name:>10}  {v:>4}km  {gear_str:>4}  "
-                  f"{engine_rpm:>5.0f}rpm  {load_ratio:>4.0%}  "
-                  f"{bsfc:>4.0f}g   {l100:>5.1f}L")
+            results.append({
+                "car_name": car.name,
+                "speed_kmh": v,
+                "gear": gear,
+                "rpm": round(engine_rpm),
+                "load_pct": round(load_ratio, 4),
+                "bsfc_gkwh": round(bsfc),
+                "l100km": round(l100, 1),
+            })
 
-        print("-" * 95)
+    return results

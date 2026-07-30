@@ -147,64 +147,68 @@ def _classify_steer(kus_deg_per_g):
         return "中性转向"
 
 
-def show_lateral_analysis(vehicle):
-    """展示横向动力学综合分析"""
+def analyze_lateral(vehicle):
+    """横向动力学综合分析，返回结构化数据。
+
+    Returns:
+        dict: 车辆横向动力学参数及分析结果
+    """
     kus_rad, kus_deg = calc_understeer_gradient(vehicle)
     steer_type = _classify_steer(kus_deg)
     v_char = calc_characteristic_speed(vehicle)
     v_crit = calc_critical_speed(vehicle)
 
-    print(f"\n{'='*60}")
-    print(f"{vehicle.name}  横向动力学分析")
-    print(f"{'='*60}")
-    print(f"  轴距:             {vehicle.wheelbase:.2f} m")
-    print(f"  质心-前轴:        {vehicle.cg_to_front:.2f} m ({vehicle.cg_to_front/vehicle.wheelbase*100:.0f}%)")
-    print(f"  质心-后轴:        {vehicle.cg_to_rear:.2f} m ({vehicle.cg_to_rear/vehicle.wheelbase*100:.0f}%)")
-    print(f"  前轴侧偏刚度:     {vehicle.cornering_stiffness_f:.0f} N/rad")
-    print(f"  后轴侧偏刚度:     {vehicle.cornering_stiffness_r:.0f} N/rad")
-    print(f"  横摆惯量 Iz:      {vehicle.yaw_inertia:.0f} kg·m²")
-    print(f"{'-'*40}")
-    print(f"  不足转向梯度 Kus: {kus_deg:+.3f} deg/g  →  {steer_type}")
-    if kus_deg > 0:
-        print(f"  特征车速:         {v_char:.1f} km/h（横摆增益峰值点）")
-    elif kus_deg < 0:
-        print(f"  临界车速:         {v_crit:.1f} km/h（超过即失稳！）")
+    return {
+        "vehicle_name": vehicle.name,
+        "wheelbase_m": vehicle.wheelbase,
+        "cg_to_front_m": vehicle.cg_to_front,
+        "cg_to_rear_m": vehicle.cg_to_rear,
+        "cg_front_pct": vehicle.cg_to_front / vehicle.wheelbase * 100,
+        "cg_rear_pct": vehicle.cg_to_rear / vehicle.wheelbase * 100,
+        "cornering_stiffness_f": vehicle.cornering_stiffness_f,
+        "cornering_stiffness_r": vehicle.cornering_stiffness_r,
+        "yaw_inertia": vehicle.yaw_inertia,
+        "kus_rad_per_g": kus_rad,
+        "kus_deg_per_g": kus_deg,
+        "steer_type": steer_type,
+        "characteristic_speed_kmh": v_char,
+        "critical_speed_kmh": v_crit,
+    }
 
 
-def show_steady_cornering_table(vehicle):
-    """不同车速下稳态转向响应对比表"""
-    print(f"\n{'='*75}")
-    print(f"{vehicle.name}  稳态转向响应（方向盘转角 3°）")
-    print(f"{'='*75}")
-    print(f"{'车速':>6}  {'横摆角速度':>10}  {'侧向加速度':>10}  {'转弯半径':>10}  {'不足转向梯度':>12}")
-    print(f"{'km/h':>6}  {'deg/s':>10}  {'g':>10}  {'m':>10}  {'deg/g':>12}")
-    print("-" * 75)
+def calc_steady_cornering_table(vehicle):
+    """不同车速下稳态转向响应对比表，返回结构化数据。
 
+    Returns:
+        list[dict]: 各车速的稳态转向响应
+    """
+    results = []
     for v in [30, 60, 90, 120, 150]:
         result = calc_steady_state_cornering(vehicle, v, steer_angle_deg=3)
-        print(f"{v:6.0f}  {result['yaw_rate_deg_s']:10.2f}  "
-              f"{result['lateral_acc_g']:10.3f}  "
-              f"{result['turn_radius_m']:10.1f}  "
-              f"{result['kus_deg_per_g']:+12.3f}")
+        results.append(result)
+    return results
 
 
-def show_step_steer_response(vehicle, vx_kmh=80, steer_deg=3):
-    """阶跃转向瞬态响应"""
+def calc_step_steer_response(vehicle, vx_kmh=80, steer_deg=3):
+    """阶跃转向瞬态响应，返回结构化数据。
+
+    Returns:
+        dict: {
+            "history": list[tuple],  原始仿真历史 (t, vy, r_rad, r_deg, ay_g)
+            "steady_yaw_rate": float,  稳态理论横摆角速度 (deg/s)
+            "steady_lateral_acc": float,  稳态理论侧向加速度 (g)
+            "final_yaw_rate": float,  仿真终值横摆角速度 (deg/s)
+            "final_lateral_acc": float,  仿真终值侧向加速度 (g)
+        }
+    """
     history = simulate_step_steer(vehicle, vx_kmh, steer_deg, duration_s=3)
-
-    print(f"\n{'='*70}")
-    print(f"{vehicle.name}  阶跃转向瞬态响应（{vx_kmh}km/h, 方向盘{steer_deg}°）")
-    print(f"{'='*70}")
-    print(f"{'时间(s)':>8}  {'vy(m/s)':>10}  {'r(deg/s)':>10}  {'ay(g)':>8}")
-    print("-" * 50)
-
-    # 打印每秒的关键帧
-    for i in range(0, len(history), 100):  # dt=0.01, 每100步 = 1秒
-        t, vy, _, r_deg, ay_g = history[i]
-        print(f"{t:8.1f}  {vy:10.3f}  {r_deg:10.2f}  {ay_g:8.3f}")
-
-    # 稳态值
     result = calc_steady_state_cornering(vehicle, vx_kmh, steer_deg)
-    final_t, final_vy, _, final_r, final_ay = history[-1]
-    print(f"\n  稳态理论值:  r={result['yaw_rate_deg_s']:.2f} deg/s,  ay={result['lateral_acc_g']:.3f} g")
-    print(f"  仿真终值:    r={final_r:.2f} deg/s,  ay={final_ay:.3f} g")
+    _, _, _, final_r, final_ay = history[-1]
+
+    return {
+        "history": history,
+        "steady_yaw_rate": result["yaw_rate_deg_s"],
+        "steady_lateral_acc": result["lateral_acc_g"],
+        "final_yaw_rate": final_r,
+        "final_lateral_acc": final_ay,
+    }

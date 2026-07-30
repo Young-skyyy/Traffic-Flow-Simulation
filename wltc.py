@@ -75,31 +75,51 @@ def get_wltc_profile():
     return profile
 
 
-def show_wltc_summary():
-    """打印 WLTC 工况概要"""
+def get_wltc_summary():
+    """WLTC 工况概要，返回结构化数据。
+
+    Returns:
+        dict: {
+            "phases":           list[dict]  各阶段概要,
+            "total_distance_km": float,
+            "profile":          list[float],
+        }
+    """
     profile = get_wltc_profile()
     phases = [
-        ("Phase 1 (Low)",  0, 589,  25.7, 56.5),
-        ("Phase 2 (Medium)",  590, 1022, 44.5, 76.6),
-        ("Phase 3 (High)",  1023, 1477, 60.7, 97.4),
-        ("Phase 4 (Extra High)",  1478, 1800, 94.1, 131.3),
+        ("Phase 1 (Low)",  0, 589),
+        ("Phase 2 (Medium)",  590, 1022),
+        ("Phase 3 (High)",  1023, 1477),
+        ("Phase 4 (Extra High)",  1478, 1800),
     ]
-    print(f"\nWLTC Class 3 标准循环工况 (共 {_WLTC_DURATION}s, ~23.27km)")
-    print(f"{'':<22} {'时间':>8} {'最高':>6} {'耗时':>6} {'距离':>8}")
-    print("-" * 52)
+    phase_list = []
     total_dist = 0
-    for name, start, end, _, _ in phases:
+    for name, start, end in phases:
         seg = profile[start:end + 1]
         max_v = max(seg)
-        dist_km = sum(v / 3.6 for v in seg) / 1000  # 每1秒积分
+        dist_km = sum(v / 3.6 for v in seg) / 1000
         total_dist += dist_km
-        print(f"  {name:<20} {start:>4}-{end:<4}s  {max_v:>5.0f}  {end-start:>4}s  {dist_km:>7.2f}km")
-    print(f"  {'总计':<20} {'0-1800s':>9}  {max(profile):>5.0f}  1800s  {total_dist:>7.2f}km")
-    return profile
+        phase_list.append({
+            "name": name,
+            "start_s": start,
+            "end_s": end,
+            "max_speed_kmh": max_v,
+            "distance_km": round(dist_km, 2),
+        })
+
+    return {
+        "phases": phase_list,
+        "total_distance_km": round(total_dist, 2),
+        "profile": profile,
+    }
 
 
-def simulate_transient_cycle(vehicle, cycle=None, dt=0.1):
-    """瞬态油耗仿真：驾驶员模型(P控制) → 车辆动力学 → BSFC查表 → 油耗累计"""
+def simulate_transient_cycle(vehicle, cycle=None, dt=0.1, verbose=True):
+    """瞬态油耗仿真：驾驶员模型(P控制) → 车辆动力学 → BSFC查表 → 油耗累计
+
+    Args:
+        verbose: 是否打印进度，默认 True（向后兼容）
+    """
     if cycle is None:
         raise ValueError("cycle must be provided")
     total_time = sum(phase[1] for phase in cycle)
@@ -118,14 +138,15 @@ def simulate_transient_cycle(vehicle, cycle=None, dt=0.1):
     for _, duration, target_kmh in cycle:
         targets.extend([target_kmh / 3.6] * int(duration / dt))
 
-    print(f"\n{'='*95}")
-    print(f"  瞬态油耗仿真 — {vehicle.name} — 简易城市工况 ({total_time}s)")
-    print(f"{'='*95}")
-    print(f"{'时间':>6}  {'目标':>5}  {'实际':>5}  {'油门':>5}  {'档位':>3}  "
-          f"{'转速':>6}  {'负荷':>5}  {'BSFC':>5}  {'瞬态油耗':>8}  {'累计':>7}")
-    print(f"{'s':>6}  {'km/h':>5}  {'km/h':>5}  {'%':>5}  {'':>3}  "
-          f"{'rpm':>6}  {'%':>5}  {'g/kWh':>5}  {'L/100km':>8}  {'L':>7}")
-    print("-" * 95)
+    if verbose:
+        print(f"\n{'='*95}")
+        print(f"  瞬态油耗仿真 — {vehicle.name} — 简易城市工况 ({total_time}s)")
+        print(f"{'='*95}")
+        print(f"{'时间':>6}  {'目标':>5}  {'实际':>5}  {'油门':>5}  {'档位':>3}  "
+              f"{'转速':>6}  {'负荷':>5}  {'BSFC':>5}  {'瞬态油耗':>8}  {'累计':>7}")
+        print(f"{'s':>6}  {'km/h':>5}  {'km/h':>5}  {'%':>5}  {'':>3}  "
+              f"{'rpm':>6}  {'%':>5}  {'g/kWh':>5}  {'L/100km':>8}  {'L':>7}")
+        print("-" * 95)
 
     idx = 0
     last_print = -1.0
@@ -232,7 +253,7 @@ def simulate_transient_cycle(vehicle, cycle=None, dt=0.1):
             steady_last_speed = target_kmh
 
         # ---- 每秒打印 ----
-        if sim_time - last_print >= 1.0:
+        if verbose and sim_time - last_print >= 1.0:
             print(f"{sim_time:5.0f}s  {target_kmh:4.0f}   {speed*3.6:4.0f}   "
                   f"{throttle*100:4.0f}%  {gear:>2}档  "
                   f"{engine_rpm:5.0f}  {engine_torque/vehicle.max_torque*100 if gear>0 and throttle>0.01 else 0:4.0f}%  "
@@ -248,17 +269,21 @@ def simulate_transient_cycle(vehicle, cycle=None, dt=0.1):
             steady_total += calc_fuel_consumption(vehicle, target_kmh, seg_dist)
 
     avg_L100 = total_fuel_L / (distance / 100000) if distance > 0 else 0
-    print(f"\n结果: 总油耗 {total_fuel_L:.3f}L | 总里程 {distance:.0f}m | 平均 {avg_L100:.1f} L/100km")
-    print(f"      稳态估算: {steady_total:.3f}L (仅算各阶段匀速巡航) | 瞬态比稳态多 {total_fuel_L-steady_total:.3f}L")
+    if verbose:
+        print(f"\n结果: 总油耗 {total_fuel_L:.3f}L | 总里程 {distance:.0f}m | 平均 {avg_L100:.1f} L/100km")
+        print(f"      稳态估算: {steady_total:.3f}L (仅算各阶段匀速巡航) | 瞬态比稳态多 {total_fuel_L-steady_total:.3f}L")
     return total_fuel_L, distance, avg_L100, steady_total
 
 
-def simulate_wltc(vehicle, dt=0.2):
+def simulate_wltc(vehicle, dt=0.2, verbose=True):
     """
     运行 WLTC Class 3 完整循环（1800 秒）并对比瞬态 vs 稳态油耗。
 
     因周期长达 1800s，每 30 秒打印一次状态快照，
     并对加速/巡航/减速/怠速阶段的燃油分配做分析。
+
+    Args:
+        verbose: 是否打印进度，默认 True（向后兼容）
     """
 
     def format_phase_desc(start_s, end_s, profile):
@@ -286,14 +311,15 @@ def simulate_wltc(vehicle, dt=0.2):
     phase_dist = {"Low": 0.0, "Med": 0.0, "Hi": 0.0, "ExHi": 0.0}
     accel_fuel = cruise_fuel = decel_fuel = idle_fuel = 0.0
 
-    print(f"\n{'='*100}")
-    print(f"  WLTC Class 3 瞬态仿真 — {vehicle.name} — 1800s 标准循环")
-    print(f"{'='*100}")
-    print(f"{'时间':>6}  {'目标':>5}  {'实际':>5}  {'油门':>5}  {'档位':>3}  "
-          f"{'转速':>6}  {'BSFC':>5}  {'瞬时油耗':>8}  {'累计':>7}  {'阶段'}")
-    print(f"{'s':>6}  {'km/h':>5}  {'km/h':>5}  {'%':>5}  {'':>3}  "
-          f"{'rpm':>6}  {'g/kWh':>5}  {'L/100km':>8}  {'L':>7}")
-    print("-" * 100)
+    if verbose:
+        print(f"\n{'='*100}")
+        print(f"  WLTC Class 3 瞬态仿真 — {vehicle.name} — 1800s 标准循环")
+        print(f"{'='*100}")
+        print(f"{'时间':>6}  {'目标':>5}  {'实际':>5}  {'油门':>5}  {'档位':>3}  "
+              f"{'转速':>6}  {'BSFC':>5}  {'瞬时油耗':>8}  {'累计':>7}  {'阶段'}")
+        print(f"{'s':>6}  {'km/h':>5}  {'km/h':>5}  {'%':>5}  {'':>3}  "
+              f"{'rpm':>6}  {'g/kWh':>5}  {'L/100km':>8}  {'L':>7}")
+        print("-" * 100)
 
     last_print = -print_interval
     throttle = 0.0
@@ -409,7 +435,7 @@ def simulate_wltc(vehicle, dt=0.2):
         last_accel = acceleration
 
         # 每 30 秒打印
-        if sim_time - last_print >= print_interval:
+        if verbose and sim_time - last_print >= print_interval:
             phase_label, _ = format_phase_desc(t_idx - 1, t_idx, wltc)
             print(f"{sim_time:5.0f}s  {target_kmh:4.0f}   {speed*3.6:4.0f}   "
                   f"{throttle*100:4.0f}%  {gear:>2}档  "
@@ -428,20 +454,21 @@ def simulate_wltc(vehicle, dt=0.2):
 
     avg_L100 = total_fuel_L / (distance / 100000) if distance > 0 else 0
 
-    print(f"\n{'='*100}")
-    print(f"  WLTC 仿真结果")
-    print(f"{'='*100}")
-    print(f"  总油耗: {total_fuel_L:.3f}L  |  总里程: {distance/1000:.2f}km  |  平均: {avg_L100:.1f} L/100km")
-    if steady_total > 0:
-        print(f"  稳态估算: {steady_total:.3f}L  |  瞬态比稳态多 {total_fuel_L-steady_total:.3f}L ({(total_fuel_L/steady_total-1)*100:+.0f}%)")
-    else:
-        print(f"  稳态估算: {steady_total:.3f}L")
-    print(f"\n  各阶段油耗:")
-    phase_names = [("Low (0-589s)", "Low"), ("Med (590-1022s)", "Med"),
-                   ("Hi (1023-1477s)", "Hi"), ("ExHi (1478-1800s)", "ExHi")]
-    for label, key in phase_names:
-        d = phase_dist[key] / 1000
-        l100 = phase_fuel[key] / (d / 100) if d > 0 else 0
-        print(f"    {label:<18} {phase_fuel[key]:.3f}L  {d:.2f}km  {l100:.1f} L/100km")
-    print(f"\n  工况分配: 加速 {accel_fuel:.3f}L | 巡航 {cruise_fuel:.3f}L | 减速 {decel_fuel:.3f}L | 怠速 {idle_fuel:.3f}L")
+    if verbose:
+        print(f"\n{'='*100}")
+        print(f"  WLTC 仿真结果")
+        print(f"{'='*100}")
+        print(f"  总油耗: {total_fuel_L:.3f}L  |  总里程: {distance/1000:.2f}km  |  平均: {avg_L100:.1f} L/100km")
+        if steady_total > 0:
+            print(f"  稳态估算: {steady_total:.3f}L  |  瞬态比稳态多 {total_fuel_L-steady_total:.3f}L ({(total_fuel_L/steady_total-1)*100:+.0f}%)")
+        else:
+            print(f"  稳态估算: {steady_total:.3f}L")
+        print(f"\n  各阶段油耗:")
+        phase_names = [("Low (0-589s)", "Low"), ("Med (590-1022s)", "Med"),
+                       ("Hi (1023-1477s)", "Hi"), ("ExHi (1478-1800s)", "ExHi")]
+        for label, key in phase_names:
+            d = phase_dist[key] / 1000
+            l100 = phase_fuel[key] / (d / 100) if d > 0 else 0
+            print(f"    {label:<18} {phase_fuel[key]:.3f}L  {d:.2f}km  {l100:.1f} L/100km")
+        print(f"\n  工况分配: 加速 {accel_fuel:.3f}L | 巡航 {cruise_fuel:.3f}L | 减速 {decel_fuel:.3f}L | 怠速 {idle_fuel:.3f}L")
     return total_fuel_L, distance, avg_L100, steady_total

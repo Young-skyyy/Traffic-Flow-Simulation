@@ -128,17 +128,27 @@ def calc_acceleration(vehicle, speed_ms):
 
 
 def simulate_acceleration(vehicle, target_speed_kmh=100, dt=0.1):
-    """模拟车辆从 0 加速到目标速度的过程"""
+    """模拟车辆从 0 加速到目标速度的过程，返回结构化数据。
+
+    Returns:
+        dict: {
+            "time":       list[float]  时间序列 (s),
+            "speed_kmh":  list[float]  速度序列 (km/h),
+            "acc_ms2":    list[float]  加速度序列 (m/s²),
+            "distance_m": list[float]  距离序列 (m),
+            "elapsed_s":  float        达到目标车速耗时,
+            "total_dist_m": float      总行驶距离,
+        }
+    """
     target = target_speed_kmh / 3.6  # km/h → m/s
     speed = 1.0  # 从 1 m/s 起步（避免除以零）
     distance = 0
     time_elapsed = 0
 
-    print(f"\n{'='*50}")
-    print(f"{vehicle.name} 加速到 {target_speed_kmh} km/h")
-    print(f"{'='*50}")
-    print(f"{'时间(s)':>8}  {'速度(km/h)':>10}  {'加速度(m/s²)':>12}  {'距离(m)':>8}")
-    print("-" * 50)
+    time_series = []
+    speed_series = []
+    acc_series = []
+    dist_series = []
 
     while speed < target and time_elapsed < 120:  # 最长模拟 120 秒
         acc = calc_acceleration(vehicle, speed)
@@ -146,10 +156,19 @@ def simulate_acceleration(vehicle, target_speed_kmh=100, dt=0.1):
         distance += speed * dt
         time_elapsed += dt
 
-        if int(time_elapsed * 10) % 10 == 0:  # 每秒打印一次
-            print(f"{time_elapsed:8.1f}  {speed*3.6:10.1f}  {acc:12.3f}  {distance:8.1f}")
+        time_series.append(round(time_elapsed, 2))
+        speed_series.append(round(speed * 3.6, 2))
+        acc_series.append(round(acc, 4))
+        dist_series.append(round(distance, 2))
 
-    print(f"\n结果: {time_elapsed:.1f} 秒跑完 {distance:.0f} 米")
+    return {
+        "time": time_series,
+        "speed_kmh": speed_series,
+        "acc_ms2": acc_series,
+        "distance_m": dist_series,
+        "elapsed_s": round(time_elapsed, 1),
+        "total_dist_m": round(distance, 1),
+    }
 
 
 def calc_braking_distance(speed_kmh, friction_coeff=0.7, reaction_time=1.5):
@@ -186,8 +205,12 @@ def calc_aero_drag_power(vehicle, speed_ms):
     return aero_force * speed_ms
 
 
-def show_power_breakdown(vehicle, speed_kmh=100, grade_percent=5):
-    """展示车辆在指定工况下的各功率分解"""
+def calc_power_breakdown(vehicle, speed_kmh=100, grade_percent=5):
+    """车辆在指定工况下的各功率分解，返回结构化数据。
+
+    Returns:
+        dict: 各功率分量（W）及汇总指标
+    """
     speed_ms = speed_kmh / 3.6
 
     rolling_power_const = vehicle.rolling_coeff * vehicle.mass * 9.8 * speed_ms
@@ -198,69 +221,103 @@ def show_power_breakdown(vehicle, speed_kmh=100, grade_percent=5):
     total_dyn = rolling_power_dyn + aero_power + grade_power
     wpk, kpt = calc_power_to_weight(vehicle)
 
-    print(f"\n{'='*60}")
-    print(f"{vehicle.name} 功率分解 @ {speed_kmh}km/h, 坡度 {grade_percent}%")
-    print(f"{'='*60}")
-    print(f"  发动机最大功率:  {vehicle.power/1000:8.1f} kW")
-    print(f"  比功率:          {wpk:8.1f} W/kg ({kpt:.1f} kW/ton)")
-    print(f"{'-'*40}")
-    print(f"  滚动阻力功率(常量 μ=0.015):  {rolling_power_const/1000:8.2f} kW")
-    print(f"  滚动阻力功率(动态 SAE J2263): {rolling_power_dyn/1000:8.2f} kW")
-    print(f"  风阻功率:                     {aero_power/1000:8.2f} kW")
-    print(f"  爬坡功率:                     {grade_power/1000:8.2f} kW")
-    print(f"{'-'*40}")
-    print(f"  需求总功率(常量):  {total_resistance_power/1000:8.2f} kW")
-    print(f"  需求总功率(动态):  {total_dyn/1000:8.2f} kW")
-    print(f"  功率利用率:        {total_resistance_power/vehicle.power*100:8.1f} %")
+    return {
+        "vehicle_name": vehicle.name,
+        "speed_kmh": speed_kmh,
+        "grade_percent": grade_percent,
+        "engine_max_power_w": vehicle.power,
+        "power_to_weight_wpk": wpk,
+        "power_to_weight_kpt": kpt,
+        "rolling_power_const_w": rolling_power_const,
+        "rolling_power_dyn_w": rolling_power_dyn,
+        "aero_power_w": aero_power,
+        "grade_power_w": grade_power,
+        "total_power_const_w": total_resistance_power,
+        "total_power_dyn_w": total_dyn,
+        "power_utilization_pct": total_resistance_power / vehicle.power * 100,
+    }
 
 
-def show_braking_table():
-    """展示不同车速下的制动距离"""
-    print(f"\n{'='*60}")
-    print("制动距离对照表（干燥沥青路面，反应时间 1.5s）")
-    print(f"{'='*60}")
-    print(f"{'车速(km/h)':>10}  {'反应距离(m)':>12}  {'制动距离(m)':>12}  {'总距离(m)':>10}")
-    print("-" * 60)
+def calc_braking_table():
+    """计算不同车速下的制动距离，返回结构化数据。
 
+    Returns:
+        list[dict]: 各车速的制动距离明细
+    """
+    results = []
     for v in [30, 50, 60, 80, 100, 120]:
         rd, bd, td = calc_braking_distance(v)
-        print(f"{v:10.0f}  {rd:12.1f}  {bd:12.1f}  {td:10.1f}")
+        results.append({
+            "speed_kmh": v,
+            "reaction_dist_m": round(rd, 1),
+            "braking_dist_m": round(bd, 1),
+            "total_dist_m": round(td, 1),
+        })
+    return results
 
 
 def car_following_simulation(lead_speed_kmh=60, follower_speed_kmh=70,
                               initial_gap_m=30, reaction_time=1.5, duration_s=30):
-    """模拟后车跟随前车：前车匀速，后车需要减速避免碰撞"""
+    """模拟后车跟随前车：前车匀速，后车需要减速避免碰撞。
+
+    修复点：用数值积分累积位置，替代原来错误的 t*speed 匀速假设。
+
+    Returns:
+        dict: {
+            "time":           list[float]  时间序列 (s),
+            "gap_m":          list[float]  车间距 (m),
+            "follower_kmh":   list[float]  后车速度 (km/h),
+            "status":         list[str]    状态标签,
+            "collision_s":    float|None   碰撞时间，无碰撞则为 None,
+        }
+    """
     lead_speed = lead_speed_kmh / 3.6
     follower_speed = follower_speed_kmh / 3.6
-    gap = initial_gap_m
-    time_elapsed = 0
     dt = 1.0
 
-    print(f"\n{'='*60}")
-    print(f"跟车模型仿真（前车{lead_speed_kmh}km/h, 后车{follower_speed_kmh}km/h, 初始间距{gap}m）")
-    print(f"{'='*60}")
-    print(f"{'时间(s)':>8}  {'间距(m)':>8}  {'后车速度':>8}  {'状态':>10}")
-    print("-" * 50)
+    # 用数值积分累积位置
+    lead_pos = 0.0
+    follower_pos = -initial_gap_m  # 后车初始落后 initial_gap 米
+    gap = initial_gap_m
+
+    time_series = []
+    gap_series = []
+    speed_series = []
+    status_series = []
+    collision_time = None
 
     for t in range(duration_s):
         # 前车匀速前进
-        lead_pos = t * lead_speed
+        lead_pos += lead_speed * dt
 
-        # 后车如果没有反应延迟，减速
+        # 后车根据间距调整速度
         if gap < 10:
-            # 紧急制动（减速度 6 m/s²）
             follower_speed = max(0, follower_speed - 6 * dt)
         elif gap < 30:
-            # 轻微减速（减速度 2 m/s²）
             follower_speed = max(lead_speed, follower_speed - 2 * dt)
 
-        follower_pos = t * follower_speed
-        gap = initial_gap_m + (lead_pos - follower_pos)
+        follower_pos += follower_speed * dt
+        gap = lead_pos - follower_pos
 
-        status = "安全" if gap > 15 else ("警告" if gap > 5 else "危险！")
-        print(f"{t:8.0f}  {gap:8.1f}  {follower_speed*3.6:8.1f}  {status:>10}")
+        if gap > 15:
+            status = "安全"
+        elif gap > 5:
+            status = "警告"
+        else:
+            status = "危险！"
 
-        if gap <= 0:
-            print(f"\n!!! 碰撞发生 !!! 时间: {t}s")
-            break
-        time_elapsed = t
+        time_series.append(float(t))
+        gap_series.append(round(gap, 1))
+        speed_series.append(round(follower_speed * 3.6, 1))
+        status_series.append(status)
+
+        if gap <= 0 and collision_time is None:
+            collision_time = float(t)
+
+    return {
+        "time": time_series,
+        "gap_m": gap_series,
+        "follower_kmh": speed_series,
+        "status": status_series,
+        "collision_s": collision_time,
+    }

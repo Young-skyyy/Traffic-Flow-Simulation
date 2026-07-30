@@ -9,6 +9,7 @@ rl_env/
 *.log
 *.asc
 *.dbc
+*.png
 .DS_Store
 Thumbs.db
 .idea/
