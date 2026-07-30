@@ -231,22 +231,22 @@ class VehicleECU:
 
 def _gen_engine_data(veh, sim_time):
     """EMS 发动机数据信号值"""
-    return [veh.throttle, veh.rpm, veh.coolant_temp, veh.speed, random.randint(30, 50)]
+    return [veh.throttle, veh.rpm, veh.coolant_temp, veh.speed, veh._rng.randint(30, 50)]
 
 
 def _gen_battery_status(veh, sim_time):
     """BMS 电池状态信号值"""
-    return [veh.soc, random.uniform(350, 400), random.uniform(-10, 50),
-            random.uniform(25, 35), random.uniform(22, 30)]
+    return [veh.soc, veh._rng.uniform(350, 400), veh._rng.uniform(-10, 50),
+            veh._rng.uniform(25, 35), veh._rng.uniform(22, 30)]
 
 
 def _gen_abs_wheel_speed(veh, sim_time):
     """ABS 四轮轮速信号值"""
     base = veh.speed
-    return [base + random.uniform(-0.5, 0.5),
-            base + random.uniform(-0.5, 0.5),
-            base + random.uniform(-0.3, 0.3),
-            base + random.uniform(-0.3, 0.3)]
+    return [base + veh._rng.uniform(-0.5, 0.5),
+            base + veh._rng.uniform(-0.5, 0.5),
+            base + veh._rng.uniform(-0.3, 0.3),
+            base + veh._rng.uniform(-0.3, 0.3)]
 
 
 def _gen_transmission(veh, sim_time):
@@ -345,8 +345,11 @@ DTC_DATABASE = {
 }
 
 
-def simulate_dtc_check() -> dict:
+def simulate_dtc_check(seed: int | None = 42) -> dict:
     """模拟诊断仪读取故障码，返回结构化数据。
+
+    Args:
+        seed: 随机种子，默认 42 保证可复现
 
     Returns:
         dict: {
@@ -354,7 +357,8 @@ def simulate_dtc_check() -> dict:
             "details": list[dict],
         }
     """
-    active = random.sample(list(DTC_DATABASE.keys()), k=random.randint(0, 2))
+    rng = random.Random(seed)
+    active = rng.sample(list(DTC_DATABASE.keys()), k=rng.randint(0, 2))
     details = [{"code": code, "ecu": DTC_DATABASE[code]["ecu"],
                 "desc": DTC_DATABASE[code]["desc"]} for code in active]
 
@@ -473,8 +477,8 @@ def simulate_can_bus_advanced(duration_s: float = 10, baudrate: int = 500000,
             if timers[name] >= msg_def["cycle_ms"]:
                 timers[name] -= msg_def["cycle_ms"]
 
-                # 错误帧注入
-                is_error = random.random() < error_rate
+                # 错误帧注入（使用 ECU 的 RNG，保证可复现）
+                is_error = veh._rng.random() < error_rate
                 if is_error:
                     error_frames += 1
                     frame_bits = 6  # 主动错误标志 = 6 dominant bits

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-UDS (ISO 14229) 诊断协议栈：Session / DID / DTC / Tester Present
+UDS (ISO 14229) 诊断协议栈：Session / Security Access / DID / DTC / Tester Present
 
 模拟 ECU 诊断服务器 + 诊断仪交互，集成到 CAN 总线仿真中。
 """
@@ -8,6 +8,7 @@ UDS (ISO 14229) 诊断协议栈：Session / DID / DTC / Tester Present
 from __future__ import annotations
 
 import time
+import random
 from enum import IntEnum
 
 
@@ -17,6 +18,7 @@ class UDSSID(IntEnum):
     DIAGNOSTIC_SESSION_CONTROL = 0x10
     ECU_RESET                = 0x11
     READ_DATA_BY_IDENTIFIER  = 0x22
+    SECURITY_ACCESS          = 0x27
     READ_DTC_INFORMATION     = 0x19
     TESTER_PRESENT           = 0x3E
 
@@ -152,8 +154,8 @@ class ECUDiagnosticServer:
     # 不同 session 下可访问的服务
     _SESSION_SERVICES = {
         "default":      {UDSSID.TESTER_PRESENT, UDSSID.READ_DATA_BY_IDENTIFIER, UDSSID.READ_DTC_INFORMATION, UDSSID.DIAGNOSTIC_SESSION_CONTROL},
-        "extended":     {UDSSID.TESTER_PRESENT, UDSSID.READ_DATA_BY_IDENTIFIER, UDSSID.READ_DTC_INFORMATION, UDSSID.DIAGNOSTIC_SESSION_CONTROL, UDSSID.ECU_RESET},
-        "programming":  {UDSSID.TESTER_PRESENT, UDSSID.DIAGNOSTIC_SESSION_CONTROL, UDSSID.ECU_RESET},
+        "extended":     {UDSSID.TESTER_PRESENT, UDSSID.READ_DATA_BY_IDENTIFIER, UDSSID.READ_DTC_INFORMATION, UDSSID.DIAGNOSTIC_SESSION_CONTROL, UDSSID.ECU_RESET, UDSSID.SECURITY_ACCESS},
+        "programming":  {UDSSID.TESTER_PRESENT, UDSSID.DIAGNOSTIC_SESSION_CONTROL, UDSSID.ECU_RESET, UDSSID.SECURITY_ACCESS},
     }
 
     def __init__(self, ecu_name: str, did_values: dict[int, float] | None = None):
@@ -200,6 +202,8 @@ class ECUDiagnosticServer:
             return self._handle_read_dtc(request)
         elif sid == UDSSID.ECU_RESET:
             return self._handle_ecu_reset(request)
+        elif sid == UDSSID.SECURITY_ACCESS:
+            return self._handle_security_access(request)
 
         return self._negative_response(sid, NRC.SERVICE_NOT_SUPPORTED)
 
@@ -267,6 +271,42 @@ class ECUDiagnosticServer:
                           count])
         else:
             return self._negative_response(UDSSID.READ_DTC_INFORMATION, NRC.SUB_FUNCTION_NOT_SUPPORTED)
+
+    def _handle_security_access(self, request: bytes) -> bytes:
+        """0x27 Security Access：requestSeed (0x01) / sendKey (0x02)。
+
+        requestSeed: 返回 2 字节随机数
+        sendKey:     key = seed ^ 0x5555 (16-bit XOR)，校验通过提升 security_level
+        """
+        if len(request) < 2:
+            return self._negative_response(UDSSID.SECURITY_ACCESS, NRC.INCORRECT_MESSAGE_LENGTH)
+        sub = request[1]
+
+        if sub == 0x01:  # requestSeed
+            # 部分子功能（奇数）需要 suppress positive response
+            suppress = (sub & 0x80) != 0
+            actual_sub = sub & 0x7F
+            self._pending_seed = random.randint(0, 0xFFFF)
+            if suppress:
+                return b""  # 抑制正响应
+            return bytes([UDSSID.SECURITY_ACCESS + POSITIVE_RESPONSE_OFFSET, 0x01]) + \
+                self._pending_seed.to_bytes(2, "big")
+
+        elif sub == 0x02:  # sendKey
+            if len(request) < 4:
+                return self._negative_response(UDSSID.SECURITY_ACCESS, NRC.INCORRECT_MESSAGE_LENGTH)
+            if not hasattr(self, "_pending_seed"):
+                return self._negative_response(UDSSID.SECURITY_ACCESS, NRC.CONDITIONS_NOT_CORRECT)
+            received_key = int.from_bytes(request[2:4], "big")
+            expected_key = self._pending_seed ^ 0x5555
+            if received_key == expected_key:
+                self.session.security_level = 1
+                del self._pending_seed
+                return bytes([UDSSID.SECURITY_ACCESS + POSITIVE_RESPONSE_OFFSET, 0x02])
+            else:
+                return self._negative_response(UDSSID.SECURITY_ACCESS, NRC.REQUEST_OUT_OF_RANGE)
+
+        return self._negative_response(UDSSID.SECURITY_ACCESS, NRC.SUB_FUNCTION_NOT_SUPPORTED)
 
     def _handle_ecu_reset(self, request: bytes) -> bytes:
         if len(request) < 2:

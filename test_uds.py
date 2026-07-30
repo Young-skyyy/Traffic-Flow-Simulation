@@ -178,3 +178,52 @@ class TestECUDiagnosticNegativeResponses:
         resp = ems_server.handle_request(bytes([UDSSID.DIAGNOSTIC_SESSION_CONTROL, 0xFF]))
         assert resp[0] == NEGATIVE_RESPONSE_SID
         assert resp[2] == NRC.SUB_FUNCTION_NOT_SUPPORTED
+
+
+# ---- Security Access (0x27) ----
+
+class TestSecurityAccess:
+    """0x27 Security Access — requestSeed + sendKey"""
+
+    @pytest.fixture
+    def server(self):
+        srv = ECUDiagnosticServer("EMS")
+        # 切换到 extended session（0x27 需要在该 session 下）
+        srv.handle_request(bytes([UDSSID.DIAGNOSTIC_SESSION_CONTROL, 0x03]))
+        return srv
+
+    def test_request_seed_returns_2_bytes(self, server):
+        resp = server.handle_request(bytes([UDSSID.SECURITY_ACCESS, 0x01]))
+        assert resp[0] == UDSSID.SECURITY_ACCESS + POSITIVE_RESPONSE_OFFSET
+        assert resp[1] == 0x01
+        assert len(resp) == 4  # SID+0x40 + sub + seed(2 bytes)
+
+    def test_full_unlock_sequence(self, server):
+        # 1. requestSeed
+        resp = server.handle_request(bytes([UDSSID.SECURITY_ACCESS, 0x01]))
+        seed = int.from_bytes(resp[2:4], "big")
+
+        # 2. sendKey = seed ^ 0x5555
+        key = seed ^ 0x5555
+        resp = server.handle_request(bytes([UDSSID.SECURITY_ACCESS, 0x02]) + key.to_bytes(2, "big"))
+        assert resp[0] == UDSSID.SECURITY_ACCESS + POSITIVE_RESPONSE_OFFSET
+        assert resp[1] == 0x02
+        assert server.session.security_level == 1, "解锁后 security_level 应为 1"
+
+    def test_wrong_key_returns_negative(self, server):
+        # requestSeed
+        resp = server.handle_request(bytes([UDSSID.SECURITY_ACCESS, 0x01]))
+        seed = int.from_bytes(resp[2:4], "big")
+
+        # 发送错误 key
+        wrong_key = (seed ^ 0x5555) + 1
+        resp = server.handle_request(bytes([UDSSID.SECURITY_ACCESS, 0x02]) + wrong_key.to_bytes(2, "big"))
+        assert resp[0] == NEGATIVE_RESPONSE_SID
+        assert resp[1] == UDSSID.SECURITY_ACCESS
+        assert resp[2] == NRC.REQUEST_OUT_OF_RANGE
+
+    def test_send_key_without_seed_returns_nr(self, server):
+        """未先 requestSeed 直接 sendKey 应返回 NRC 0x22"""
+        resp = server.handle_request(bytes([UDSSID.SECURITY_ACCESS, 0x02, 0x00, 0x00]))
+        assert resp[0] == NEGATIVE_RESPONSE_SID
+        assert resp[2] == NRC.CONDITIONS_NOT_CORRECT
