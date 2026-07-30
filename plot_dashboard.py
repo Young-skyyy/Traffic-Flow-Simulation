@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-BSFC 万有特性 + 横向动力学 四合一汇总图
-四面板：发动机效率 Map / 稳态转向响应 / 转弯半径 / 阶跃瞬态响应
+BSFC 万有特性 + 横向动力学 + 跟车/ACC 五合一汇总图
+五面板：发动机效率 Map / 稳态转向 / 转弯半径 / 阶跃瞬态 / ACC 跟车
 """
 
 import matplotlib
@@ -12,7 +12,7 @@ import math
 from scipy.interpolate import RectBivariateSpline
 
 from bsfc import _BSFC_RPM_GRID, _BSFC_LOAD_GRID, _BSFC_GASOLINE
-from vehicle import car_sedan
+from vehicle import car_sedan, car_following_simulation, acc_simulation
 from lateral_dynamics import (
     calc_steady_state_cornering,
     simulate_step_steer,
@@ -22,35 +22,42 @@ from _constants import KMH_TO_MS
 
 
 def plot_dashboard(vehicle=None, save_path=None):
-    """四合一仪表盘: BSFC Map + 稳态转向 + 转弯半径 + 阶跃瞬态"""
+    """五合一仪表盘: BSFC Map + 稳态转向 + 转弯半径 + 阶跃瞬态 + ACC 跟车"""
     if vehicle is None:
         vehicle = car_sedan
 
-    # 中文字体 —— 按平台实际检测，找不到则降级英文
+    # 中文字体
     has_font, _ = setup_chinese_font()
 
-    fig = plt.figure(figsize=(16, 11))
-    title_text = f"{vehicle.name} — 动力总成 & 横向动力学 综合分析" if has_font else \
-                 f"{vehicle.name} — Powertrain & Lateral Dynamics Analysis"
-    fig.suptitle(title_text, fontsize=16, fontweight="bold", y=0.98)
+    fig = plt.figure(figsize=(18, 14))
+    title_text = f"{vehicle.name} — 动力总成 & 横向动力学 & IDM 跟车 综合分析" if has_font else \
+                 f"{vehicle.name} — Powertrain & Lateral & IDM Analysis"
+    fig.suptitle(title_text, fontsize=16, fontweight="bold", y=0.99)
 
-    # 左上: BSFC Map
-    ax1 = fig.add_subplot(2, 2, 1)
+    gs = fig.add_gridspec(3, 2, hspace=0.35, wspace=0.30,
+                          height_ratios=[1, 1, 0.85])
+
+    # (0,0): BSFC Map
+    ax1 = fig.add_subplot(gs[0, 0])
     _draw_bsfc_panel(ax1)
 
-    # 右上: 稳态转向响应 (双Y轴)
-    ax2 = fig.add_subplot(2, 2, 2)
+    # (0,1): 稳态转向响应
+    ax2 = fig.add_subplot(gs[0, 1])
     _draw_steady_cornering_panel(ax2, vehicle)
 
-    # 左下: 转弯半径 vs 车速
-    ax3 = fig.add_subplot(2, 2, 3)
+    # (1,0): 转弯半径 vs 车速
+    ax3 = fig.add_subplot(gs[1, 0])
     _draw_turn_radius_panel(ax3, vehicle)
 
-    # 右下: 阶跃转向瞬态响应
-    ax4 = fig.add_subplot(2, 2, 4)
+    # (1,1): 阶跃转向瞬态响应
+    ax4 = fig.add_subplot(gs[1, 1])
     _draw_step_steer_panel(ax4, vehicle)
 
-    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    # (2,:): ACC 跟车响应（跨两列）
+    ax5 = fig.add_subplot(gs[2, :])
+    _draw_acc_panel(ax5, vehicle)
+
+    plt.tight_layout(rect=[0, 0, 1, 0.97])
 
     if save_path is None:
         from datetime import datetime
@@ -248,6 +255,43 @@ def _draw_step_steer_panel(ax, vehicle):
     ax.set_xlabel(get_label("时间 (s)"))
     ax.set_ylabel(get_label("横摆角速度 (deg/s)"))
     ax.set_title(get_label("阶跃转向瞬态响应 (80km/h, 3°)"), fontweight="bold")
+    ax.grid(True, alpha=0.3)
+
+
+def _draw_acc_panel(ax, vehicle):
+    """IDM 跟车 / ACC 自适应巡航响应"""
+    has_font, _ = setup_chinese_font()
+    # 用 ACC 场景数据
+    data = acc_simulation()
+
+    times = data["time"]
+    ax_twin = ax.twinx()
+
+    color_vf = "#2c7bb6"
+    color_vl = "#7f7f7f"
+    color_gap = "#d7191c"
+
+    # 后车速度（左Y轴）
+    line1, = ax.plot(times, data["follower_kmh"], color=color_vf, linewidth=1.8,
+                     label=get_label("后车速度"))
+    line2, = ax.plot(times, data["leader_kmh"], color=color_vl, linewidth=1.5,
+                     linestyle="--", label=get_label("前车速度"))
+
+    # 间距（右Y轴）
+    line3, = ax_twin.plot(times, data["gap_m"], color=color_gap, linewidth=1.2,
+                          linestyle=":", alpha=0.7, label=get_label("间距 (m)"))
+
+    ax.set_xlabel(get_label("时间 (s)"))
+    ax.set_ylabel("速度 (km/h)", color=color_vf)
+    ax_twin.set_ylabel("间距 (m)", color=color_gap)
+    ax.tick_params(axis="y", labelcolor=color_vf)
+    ax_twin.tick_params(axis="y", labelcolor=color_gap)
+
+    # 图例
+    lines = [line1, line2, line3]
+    labels = [l.get_label() for l in lines]
+    ax.legend(lines, labels, loc="upper right", fontsize=8)
+    ax.set_title(get_label("IDM 自适应巡航 (ACC) 响应"), fontweight="bold")
     ax.grid(True, alpha=0.3)
 
 

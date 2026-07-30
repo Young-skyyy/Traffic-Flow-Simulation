@@ -18,6 +18,7 @@ from vehicle import (
     calc_braking_distance,
     calc_braking_table,
     car_following_simulation,
+    acc_simulation,
     calc_grade_power,
     calc_power_to_weight,
     calc_aero_drag_power,
@@ -100,18 +101,39 @@ def display_fuel_table(data):
 
 
 def display_car_following(data):
-    """打印跟车模型仿真结果"""
-    print(f"\n{'='*60}")
-    print(f"跟车模型仿真（前车60km/h, 后车70km/h, 初始间距30m）")
-    print(f"{'='*60}")
-    print(f"{'时间(s)':>8}  {'间距(m)':>8}  {'后车速度':>8}  {'状态':>10}")
+    """打印 IDM 跟车模型仿真结果"""
+    print(f"\n{'='*70}")
+    print(f"  IDM 跟车模型（前车{data['leader_kmh']}km/h, 后车{data['follower_kmh'][0]:.0f}km/h, 初始间距{data['gap_m'][0]:.0f}m）")
+    print(f"{'='*70}")
+    print(f"{'时间(s)':>8}  {'间距(m)':>8}  {'后车km/h':>9}  {'加速度':>7}  {'状态':>8}")
     print("-" * 50)
-    for i in range(len(data["time"])):
+    for i in range(0, len(data["time"]), 10):  # dt=0.1, 每10步=1秒
         print(f"{data['time'][i]:8.0f}  {data['gap_m'][i]:8.1f}  "
-              f"{data['follower_kmh'][i]:8.1f}  {data['status'][i]:>10}")
-        if data["gap_m"][i] <= 0:
-            print(f"\n!!! 碰撞发生 !!! 时间: {data['time'][i]:.0f}s")
+              f"{data['follower_kmh'][i]:9.1f}  {data['acc_ms2'][i]:+7.3f}  "
+              f"{data['status'][i]:>8}")
+        if data["collision_s"] and data["time"][i] >= data["collision_s"]:
+            print(f"\n  !!! 碰撞发生 !!! 时间: {data['collision_s']}s")
             break
+    final_gap = data["gap_m"][-1]
+    print(f"\n  终态间距: {final_gap:.1f}m  {'✓ 安全跟车' if final_gap > 5 else '⚠ 间距过近'}")
+
+
+def display_acc(data):
+    """打印 ACC 自适应巡航仿真结果"""
+    print(f"\n{'='*75}")
+    print(f"  ACC 自适应巡航（IDM 控制器）")
+    print(f"{'='*75}")
+    print(f"{'时间(s)':>8}  {'前车km/h':>9}  {'后车km/h':>9}  {'间距(m)':>8}  {'加速度':>7}")
+    print("-" * 55)
+    for i in range(0, len(data["time"]), 10):
+        print(f"{data['time'][i]:8.0f}  {data['leader_kmh'][i]:9.1f}  "
+              f"{data['follower_kmh'][i]:9.1f}  {data['gap_m'][i]:8.1f}  "
+              f"{data['acc_ms2'][i]:+7.3f}")
+    # 统计
+    min_gap = min(data["gap_m"])
+    max_acc = max(data["acc_ms2"])
+    max_dec = min(data["acc_ms2"])
+    print(f"\n  最小间距: {min_gap:.1f}m  |  最大加速度: {max_acc:+.3f} m/s²  |  最大减速度: {max_dec:+.3f} m/s²")
 
 
 def display_power_breakdown(data):
@@ -208,6 +230,9 @@ if __name__ == "__main__":
 
     cf_result = car_following_simulation()
     display_car_following(cf_result)
+
+    acc_result = acc_simulation()
+    display_acc(acc_result)
 
     for car, speed, grade in [
         (car_sedan, 100, 5),

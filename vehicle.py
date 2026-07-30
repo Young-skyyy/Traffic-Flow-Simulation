@@ -256,43 +256,89 @@ def calc_braking_table() -> list[dict]:
     return results
 
 
+def idm_acceleration(v_ego: float, v_leader: float, gap: float,
+                     v0: float | None = None,
+                     T: float = 1.5, s0: float = 2.0,
+                     a: float = 1.4, b: float = 2.0,
+                     delta: int = 4) -> float:
+    """IDM (Intelligent Driver Model) 跟车加速度。
+
+    a_idm = a * [1 - (v/v0)^δ - (s*(v, Δv) / s)²]
+
+    其中 s*(v, Δv) = s0 + v·T + v·Δv / (2·√(a·b))
+
+    Args:
+        v_ego:    自车速度 (m/s)
+        v_leader: 前车速度 (m/s)
+        gap:      实际间距 (m)
+        v0:       期望速度 (m/s)，默认取 v_leader（跟车模式）
+        T:        安全时距 (s)
+        s0:       最小停车间距 (m)
+        a:        最大加速度 (m/s²)
+        b:        舒适减速度 (m/s²，正值)
+        delta:    加速度指数
+
+    Returns:
+        float: 加速度 (m/s²)，正值加速、负值减速
+    """
+    if v0 is None:
+        v0 = v_leader  # 跟车模式下期望速度 = 前车速度
+
+    if v_ego <= 0 and v0 <= 0:
+        return 0.0
+
+    v_ego = max(v_ego, 0.01)  # 避免除零
+    dv = v_ego - v_leader      # 速度差，正值 = 自车更快（接近前车）
+
+    # 期望安全间距
+    s_star = s0 + max(0, v_ego * T + v_ego * dv / (2 * math.sqrt(a * b)))
+
+    # 自由加速项
+    free_road = 1.0 - (v_ego / max(v0, 0.1)) ** delta
+
+    # 交互制动项
+    interaction = (s_star / max(gap, 0.1)) ** 2
+
+    return a * (free_road - interaction)
+
+
 def car_following_simulation(lead_speed_kmh: float = 60,
                              follower_speed_kmh: float = 70,
                              initial_gap_m: float = 30,
-                             reaction_time: float = 1.5,
-                             duration_s: int = 30) -> dict:
-    """模拟后车跟随前车：前车匀速，后车需要减速避免碰撞。
+                             duration_s: float = 30,
+                             dt: float = 0.1) -> dict:
+    """IDM 跟车仿真：前车匀速，后车用 IDM 跟随。
 
-    修复点：用数值积分累积位置，替代原来错误的 t*speed 匀速假设。
+    Returns:
+        dict: {time, gap_m, follower_kmh, leader_kmh, acc_ms2, status, collision_s}
     """
     lead_speed = lead_speed_kmh * KMH_TO_MS
     follower_speed = follower_speed_kmh * KMH_TO_MS
-    dt = 1.0
 
-    # 用数值积分累积位置
     lead_pos = 0.0
-    follower_pos = -initial_gap_m  # 后车初始落后 initial_gap 米
+    follower_pos = -initial_gap_m
     gap = initial_gap_m
 
     time_series: list[float] = []
     gap_series: list[float] = []
     speed_series: list[float] = []
+    acc_series: list[float] = []
     status_series: list[str] = []
     collision_time: float | None = None
 
-    for t in range(duration_s):
-        # 前车匀速前进
+    t = 0.0
+    while t <= duration_s:
+        # IDM 加速度
+        acc = idm_acceleration(follower_speed, lead_speed, gap,
+                               v0=lead_speed, T=1.5, s0=2.0, a=1.4, b=2.0)
+
+        # 欧拉积分更新
+        follower_speed = max(0.0, follower_speed + acc * dt)
         lead_pos += lead_speed * dt
-
-        # 后车根据间距调整速度
-        if gap < 10:
-            follower_speed = max(0.0, follower_speed - 6 * dt)
-        elif gap < 30:
-            follower_speed = max(lead_speed, follower_speed - 2 * dt)
-
         follower_pos += follower_speed * dt
         gap = lead_pos - follower_pos
 
+        # 状态判定
         if gap > 15:
             status = "安全"
         elif gap > 5:
@@ -300,18 +346,98 @@ def car_following_simulation(lead_speed_kmh: float = 60,
         else:
             status = "危险！"
 
-        time_series.append(float(t))
+        time_series.append(round(t, 2))
         gap_series.append(round(gap, 1))
         speed_series.append(round(follower_speed * MS_TO_KMH, 1))
+        acc_series.append(round(acc, 3))
         status_series.append(status)
 
         if gap <= 0 and collision_time is None:
-            collision_time = float(t)
+            collision_time = round(t, 2)
+
+        t += dt
 
     return {
         "time": time_series,
         "gap_m": gap_series,
         "follower_kmh": speed_series,
+        "leader_kmh": lead_speed_kmh,
+        "acc_ms2": acc_series,
         "status": status_series,
         "collision_s": collision_time,
+    }
+
+
+def acc_simulation(lead_profile: list[tuple[float, float]] | None = None,
+                   follower_v0_kmh: float = 50,
+                   initial_gap_m: float = 40,
+                   dt: float = 0.1) -> dict:
+    """ACC 场景仿真：前车做变速工况，后车用 IDM 自适应巡航。
+
+    Args:
+        lead_profile: 前车速度曲线 [(时间s, 速度km/h), ...]，默认：加速→巡航→减速
+        follower_v0_kmh: 后车初始速度 (km/h)
+        initial_gap_m: 初始间距 (m)
+
+    Returns:
+        dict: {time, gap_m, follower_kmh, leader_kmh, acc_ms2}
+    """
+    if lead_profile is None:
+        # 默认工况：前车 0→80 加速，80 巡航，80→0 减速
+        lead_profile = [
+            (0, 0), (5, 40), (10, 80), (20, 80), (30, 40), (35, 0),
+        ]
+
+    # 构建前车逐秒速度曲线（线性插值）
+    total_time = lead_profile[-1][0]
+    steps = int(total_time / dt)
+    lead_speeds: list[float] = []
+    seg_idx = 0
+    for i in range(steps + 1):
+        sim_time = i * dt
+        while seg_idx < len(lead_profile) - 2 and sim_time > lead_profile[seg_idx + 1][0]:
+            seg_idx += 1
+        t0, v0 = lead_profile[seg_idx]
+        t1, v1 = lead_profile[seg_idx + 1]
+        duration = t1 - t0
+        ratio = (sim_time - t0) / duration if duration > 0 else 1.0
+        lead_speeds.append(max(0, v0 + (v1 - v0) * ratio) * KMH_TO_MS)
+
+    follower_speed = follower_v0_kmh * KMH_TO_MS
+    lead_pos = 0.0
+    follower_pos = -initial_gap_m
+
+    time_series: list[float] = []
+    gap_series: list[float] = []
+    follower_spd: list[float] = []
+    leader_spd: list[float] = []
+    acc_series: list[float] = []
+
+    for i in range(steps + 1):
+        sim_time = i * dt
+        lead_v = lead_speeds[i]
+
+        # 前车期望速度（IDM 用前车当前速度作为 v0，模拟跟车）
+        gap = lead_pos - follower_pos
+        # 如果前车太远（gap > 100m），切换到自由巡航模式
+        v_desired = lead_v if gap < 100 else follower_v0_kmh * KMH_TO_MS
+        acc = idm_acceleration(follower_speed, lead_v, gap,
+                               v0=v_desired, T=1.5, s0=2.0, a=1.4, b=2.0)
+
+        follower_speed = max(0.0, follower_speed + acc * dt)
+        lead_pos += lead_v * dt
+        follower_pos += follower_speed * dt
+
+        time_series.append(round(sim_time, 2))
+        gap_series.append(round(lead_pos - follower_pos, 1))
+        follower_spd.append(round(follower_speed * MS_TO_KMH, 1))
+        leader_spd.append(round(lead_v * MS_TO_KMH, 1))
+        acc_series.append(round(acc, 3))
+
+    return {
+        "time": time_series,
+        "gap_m": gap_series,
+        "follower_kmh": follower_spd,
+        "leader_kmh": leader_spd,
+        "acc_ms2": acc_series,
     }

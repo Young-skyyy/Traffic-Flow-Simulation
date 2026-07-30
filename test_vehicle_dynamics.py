@@ -16,6 +16,9 @@ from vehicle import (
     simulate_acceleration,
     calc_power_breakdown,
     calc_braking_table,
+    idm_acceleration,
+    car_following_simulation,
+    acc_simulation,
 )
 from lateral_dynamics import (
     calc_slip_angles,
@@ -769,3 +772,83 @@ class TestFuelTable:
         sedan_90 = next(r for r in table if r["car_name"] == "普通轿车" and r["speed_kmh"] == 90)
         truck_70 = next(r for r in table if r["car_name"] == "重型卡车" and r["speed_kmh"] == 70)
         assert truck_70["l100km"] > sedan_90["l100km"]
+
+
+# ---- IDM 跟车模型测试 ----
+
+class TestIDMAcceleration:
+    """idm_acceleration — IDM 核心公式"""
+
+    def test_free_road_accelerates(self):
+        """前方无车（gap 极大）时应加速趋近期望速度"""
+        acc = idm_acceleration(v_ego=10, v_leader=20, gap=200, v0=20, T=1.5)
+        assert acc > 0, "空旷路段应加速"
+
+    def test_too_close_decelerates(self):
+        """间距小于安全距离时应减速"""
+        acc = idm_acceleration(v_ego=20, v_leader=10, gap=5, v0=20, T=1.5)
+        assert acc < 0, "间距过近应减速"
+
+    def test_same_speed_safe_gap_zero_accel(self):
+        """同速 + 安全间距 → 加速度接近 0"""
+        # v0=22 > v_ego=15 提供轻微加速空间，gap=30 > s*=24.5 平衡 IDM 两项
+        acc = idm_acceleration(v_ego=15, v_leader=15, gap=30, v0=22, T=1.5, s0=2.0)
+        assert abs(acc) < 0.5, f"稳态跟车加速度应接近0，实际 {acc:.3f}"
+
+    def test_stopped_returns_zero(self):
+        """两车都静止 → 加速度为 0"""
+        acc = idm_acceleration(v_ego=0, v_leader=0, gap=10, v0=0)
+        assert acc == 0.0
+
+    def test_deceleration_within_comfort_limit(self):
+        """温和接近前车时减速度应在舒适范围内"""
+        # 后车 20m/s、前车 15m/s、间距 50m → 轻微减速
+        acc = idm_acceleration(v_ego=20, v_leader=15, gap=50, v0=22, T=1.0)
+        assert acc > -2.0, f"减速度 {acc:.3f} 超出舒适范围"
+
+
+class TestCarFollowingSimulation:
+    """car_following_simulation — IDM 跟车仿真"""
+
+    def test_returns_required_keys(self):
+        data = car_following_simulation(duration_s=10)
+        for key in ["time", "gap_m", "follower_kmh", "leader_kmh",
+                     "acc_ms2", "status", "collision_s"]:
+            assert key in data
+
+    def test_follower_eventually_matches_leader(self):
+        """后车初始 70km/h 追前车 60km/h → 应减速匹配"""
+        data = car_following_simulation(lead_speed_kmh=60, follower_speed_kmh=70,
+                                         initial_gap_m=30, duration_s=30)
+        final_speed = data["follower_kmh"][-1]
+        assert abs(final_speed - 60) < 5, f"后车应接近 60km/h，实际 {final_speed:.0f}"
+
+    def test_no_collision_with_safe_gap(self):
+        """30m 初始间距 + IDM → 不应碰撞"""
+        data = car_following_simulation(duration_s=20)
+        assert data["collision_s"] is None, "30m 间距不应碰撞"
+
+    def test_gap_stays_positive(self):
+        data = car_following_simulation(duration_s=20)
+        assert min(data["gap_m"]) > 0, "间距应始终为正"
+
+
+class TestACCSimulation:
+    """acc_simulation — ACC 自适应巡航场景"""
+
+    def test_returns_required_keys(self):
+        data = acc_simulation()
+        for key in ["time", "gap_m", "follower_kmh", "leader_kmh", "acc_ms2"]:
+            assert key in data
+
+    def test_follower_tracks_leader_profile(self):
+        """后车速度应大致跟随前车变速工况"""
+        data = acc_simulation()
+        # 前车最终停车，后车应显著减速
+        assert data["leader_kmh"][-1] < 2
+        # 末速度应远低于初始 50km/h
+        assert data["follower_kmh"][-1] < 50, f"后车末速度 {data['follower_kmh'][-1]} 应已减速"
+
+    def test_gap_never_negative(self):
+        data = acc_simulation()
+        assert min(data["gap_m"]) >= 0, "间距不应为负"

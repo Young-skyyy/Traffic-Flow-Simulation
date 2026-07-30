@@ -93,5 +93,9 @@ def get_label(key: str) -> str:
         "不足转向特征":            "Understeer",
         "高效率":                  "High Eff.",
         "高油耗":                  "High Cons.",
+        "后车速度":                "Ego Speed",
+        "前车速度":                "Lead Speed",
+        "间距 (m)":                "Gap (m)",
+        "IDM 自适应巡航 (ACC) 响应": "IDM ACC Response",
     }
     return _EN_FALLBACK.get(key, key)
