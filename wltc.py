@@ -3,6 +3,8 @@
 WLTC 瞬态油耗仿真：加速加浓、减速断油(DFCO)、怠速油耗
 """
 
+from __future__ import annotations
+
 import math
 
 from _constants import G, KMH_TO_MS, MS_TO_KMH, SECONDS_PER_HOUR, SECONDS_PER_MINUTE
@@ -60,7 +62,7 @@ _WLTC_WAYPOINTS = [
 _WLTC_DURATION = 1800  # 秒
 
 
-def get_wltc_profile():
+def get_wltc_profile() -> list[float]:
     """从关键拐点线性插值生成 WLTC 1Hz 速度曲线 (km/h), 返回 list[float] len=1801"""
     profile = [0.0] * (_WLTC_DURATION + 1)
     idx = 0
@@ -76,7 +78,7 @@ def get_wltc_profile():
     return profile
 
 
-def get_wltc_summary():
+def get_wltc_summary() -> dict:
     """WLTC 工况概要，返回结构化数据。
 
     Returns:
@@ -115,7 +117,8 @@ def get_wltc_summary():
     }
 
 
-def simulate_transient_cycle(vehicle, cycle=None, dt=0.1, verbose=True):
+def simulate_transient_cycle(vehicle: Vehicle, cycle: list | None = None,
+                             dt: float = 0.1, verbose: bool = True) -> tuple[float, float, float, float]:
     """瞬态油耗仿真：驾驶员模型(P控制) → 车辆动力学 → BSFC查表 → 油耗累计
 
     Args:
@@ -276,7 +279,8 @@ def simulate_transient_cycle(vehicle, cycle=None, dt=0.1, verbose=True):
     return total_fuel_L, distance, avg_L100, steady_total
 
 
-def simulate_wltc(vehicle, dt=0.2, verbose=True):
+def simulate_wltc(vehicle: Vehicle, dt: float = 0.2,
+                  verbose: bool = True) -> tuple[float, float, float, float]:
     """
     运行 WLTC Class 3 完整循环（1800 秒）并对比瞬态 vs 稳态油耗。
 

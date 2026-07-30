@@ -4,12 +4,16 @@
 从直线运动扩展到平面转向：侧偏角、横摆角速度、不足/过度转向
 """
 
+from __future__ import annotations
+
 import math
 
 from _constants import G, KMH_TO_MS
+from vehicle import Vehicle
 
 
-def calc_slip_angles(vehicle, vx_ms, vy_ms, yaw_rate, steer_angle_rad):
+def calc_slip_angles(vehicle: Vehicle, vx_ms: float, vy_ms: float,
+                     yaw_rate: float, steer_angle_rad: float) -> tuple[float, float]:
     """前后轮侧偏角 αf = (vy+a·r)/vx - δ, αr = (vy-b·r)/vx (rad)"""
     a = vehicle.cg_to_front
     b = vehicle.cg_to_rear
@@ -18,14 +22,15 @@ def calc_slip_angles(vehicle, vx_ms, vy_ms, yaw_rate, steer_angle_rad):
     return alpha_f, alpha_r
 
 
-def calc_cornering_forces(vehicle, alpha_f, alpha_r):
+def calc_cornering_forces(vehicle: Vehicle, alpha_f: float,
+                          alpha_r: float) -> tuple[float, float]:
     """线性轮胎模型: Fy = -C × α (N)"""
     Fyf = -vehicle.cornering_stiffness_f * alpha_f
     Fyr = -vehicle.cornering_stiffness_r * alpha_r
     return Fyf, Fyr
 
 
-def calc_understeer_gradient(vehicle):
+def calc_understeer_gradient(vehicle: Vehicle) -> tuple[float, float]:
     """不足转向梯度 Kus = Wf/Cf - Wr/Cr (rad/g, deg/g)"""
     m = vehicle.mass
     a = vehicle.cg_to_front
@@ -42,7 +47,7 @@ def calc_understeer_gradient(vehicle):
     return kus_rad_per_g, kus_deg_per_g
 
 
-def calc_characteristic_speed(vehicle):
+def calc_characteristic_speed(vehicle: Vehicle) -> float:
     """计算不足转向特征车速（km/h），仅对不足转向有效"""
     _, kus_deg = calc_understeer_gradient(vehicle)
     if kus_deg <= 0:
@@ -54,7 +59,7 @@ def calc_characteristic_speed(vehicle):
     return v_char_ms / KMH_TO_MS
 
 
-def calc_critical_speed(vehicle):
+def calc_critical_speed(vehicle: Vehicle) -> float:
     """计算过度转向临界车速（km/h），仅对过度转向有效
 
     超过此车速，车辆将失稳（横摆角速度趋于无穷）
@@ -68,7 +73,8 @@ def calc_critical_speed(vehicle):
     return v_crit_ms / KMH_TO_MS
 
 
-def calc_steady_state_cornering(vehicle, vx_kmh, steer_angle_deg):
+def calc_steady_state_cornering(vehicle: Vehicle, vx_kmh: float,
+                                steer_angle_deg: float) -> dict:
     """稳态转向响应（定圆/定速）"""
     vx = vx_kmh * KMH_TO_MS
     delta = math.radians(steer_angle_deg)
@@ -95,11 +101,16 @@ def calc_steady_state_cornering(vehicle, vx_kmh, steer_angle_deg):
     }
 
 
-def simulate_step_steer(vehicle, vx_kmh, steer_angle_deg, duration_s=5, dt=0.01):
+def simulate_step_steer(vehicle: Vehicle, vx_kmh: float,
+                        steer_angle_deg: float, duration_s: float = 5,
+                        dt: float = 0.01) -> list[tuple[float, float, float, float, float]]:
     """阶跃转向瞬态响应：给定车速和方向盘转角，仿真横摆响应
 
     使用 2-DOF 线性自行车模型，欧拉积分
     状态变量: [vy, r]（侧向速度、横摆角速度）
+
+    Returns:
+        每个元素为 (t, vy, r_rad, r_deg, ay_g)
     """
     vx = vx_kmh * KMH_TO_MS
     delta = math.radians(steer_angle_deg)
@@ -114,12 +125,12 @@ def simulate_step_steer(vehicle, vx_kmh, steer_angle_deg, duration_s=5, dt=0.01)
     vy = 0.0
     r = 0.0
 
-    history = []
+    history: list[tuple[float, float, float, float, float]] = []
     t = 0.0
     while t <= duration_s:
         # 前后轮侧偏角
-        alpha_f = (vy + a * r) / vx - delta if vx > 0 else 0
-        alpha_r = (vy - b * r) / vx if vx > 0 else 0
+        alpha_f = (vy + a * r) / vx - delta if vx > 0 else 0.0
+        alpha_r = (vy - b * r) / vx if vx > 0 else 0.0
 
         # 侧向力
         Fyf = -Cf * alpha_f
@@ -139,7 +150,7 @@ def simulate_step_steer(vehicle, vx_kmh, steer_angle_deg, duration_s=5, dt=0.01)
     return history
 
 
-def _classify_steer(kus_deg_per_g):
+def _classify_steer(kus_deg_per_g: float) -> str:
     """按不足转向梯度分类"""
     if kus_deg_per_g > 0.5:
         return "不足转向（稳定）"
@@ -149,12 +160,8 @@ def _classify_steer(kus_deg_per_g):
         return "中性转向"
 
 
-def analyze_lateral(vehicle):
-    """横向动力学综合分析，返回结构化数据。
-
-    Returns:
-        dict: 车辆横向动力学参数及分析结果
-    """
+def analyze_lateral(vehicle: Vehicle) -> dict:
+    """横向动力学综合分析，返回结构化数据。"""
     kus_rad, kus_deg = calc_understeer_gradient(vehicle)
     steer_type = _classify_steer(kus_deg)
     v_char = calc_characteristic_speed(vehicle)
@@ -178,31 +185,18 @@ def analyze_lateral(vehicle):
     }
 
 
-def calc_steady_cornering_table(vehicle):
-    """不同车速下稳态转向响应对比表，返回结构化数据。
-
-    Returns:
-        list[dict]: 各车速的稳态转向响应
-    """
-    results = []
+def calc_steady_cornering_table(vehicle: Vehicle) -> list[dict]:
+    """不同车速下稳态转向响应对比表，返回结构化数据。"""
+    results: list[dict] = []
     for v in [30, 60, 90, 120, 150]:
         result = calc_steady_state_cornering(vehicle, v, steer_angle_deg=3)
         results.append(result)
     return results
 
 
-def calc_step_steer_response(vehicle, vx_kmh=80, steer_deg=3):
-    """阶跃转向瞬态响应，返回结构化数据。
-
-    Returns:
-        dict: {
-            "history": list[tuple],  原始仿真历史 (t, vy, r_rad, r_deg, ay_g)
-            "steady_yaw_rate": float,  稳态理论横摆角速度 (deg/s)
-            "steady_lateral_acc": float,  稳态理论侧向加速度 (g)
-            "final_yaw_rate": float,  仿真终值横摆角速度 (deg/s)
-            "final_lateral_acc": float,  仿真终值侧向加速度 (g)
-        }
-    """
+def calc_step_steer_response(vehicle: Vehicle, vx_kmh: float = 80,
+                             steer_deg: float = 3) -> dict:
+    """阶跃转向瞬态响应，返回结构化数据。"""
     history = simulate_step_steer(vehicle, vx_kmh, steer_deg, duration_s=3)
     result = calc_steady_state_cornering(vehicle, vx_kmh, steer_deg)
     _, _, _, final_r, final_ay = history[-1]

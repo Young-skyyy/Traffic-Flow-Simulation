@@ -3,6 +3,8 @@
 BSFC 万有特性油耗模型：双线性插值查表 → L/100km
 """
 
+from __future__ import annotations
+
 import math
 
 from _constants import KMH_TO_MS, SECONDS_PER_HOUR, SECONDS_PER_MINUTE
@@ -56,7 +58,7 @@ _BSFC_DIESEL = [
 ]
 
 
-def _interpolate_bsfc(rpm, load_ratio, fuel_type="gasoline"):
+def _interpolate_bsfc(rpm: float, load_ratio: float, fuel_type: str = "gasoline") -> float:
     """在 BSFC map 中双线性插值，返回 (rpm, load) 对应的 g/kWh"""
     if fuel_type == "diesel":
         rpm_grid = _BSFC_DIESEL_RPM
@@ -100,14 +102,12 @@ def _interpolate_bsfc(rpm, load_ratio, fuel_type="gasoline"):
             q22 * t_rpm * t_load)
 
 
-def calc_fuel_consumption(vehicle, speed_kmh, distance_km):
-    """
-    基于 BSFC 万有特性 map 计算油耗（取整版，用于展示）。
-    """
+def calc_fuel_consumption(vehicle: Vehicle, speed_kmh: float, distance_km: float) -> float:
+    """基于 BSFC 万有特性 map 计算油耗（取整版，用于展示）。"""
     return round(_calc_l100_raw(vehicle, speed_kmh) * distance_km / 100, 2)
 
 
-def _calc_l100_raw(vehicle, speed_kmh):
+def _calc_l100_raw(vehicle: Vehicle, speed_kmh: float) -> float:
     """返回 L/100km 的精确值（不取整，供内部累加使用）"""
     gear = vehicle.select_gear(speed_kmh)
     if gear == 0:
@@ -128,7 +128,7 @@ def _calc_l100_raw(vehicle, speed_kmh):
     return fuel_vol_rate * (SECONDS_PER_HOUR * 100 / speed_kmh)  # L/100km
 
 
-def calc_fuel_table():
+def calc_fuel_table() -> list[dict]:
     """BSFC 模型：各车速下档位、转速、负荷和油耗，返回结构化数据。
 
     Returns:

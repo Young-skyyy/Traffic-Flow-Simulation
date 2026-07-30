@@ -19,7 +19,7 @@ _CHINESE_FONT_CANDIDATES = {
 _HAS_CHINESE_FONT = None
 
 
-def setup_chinese_font():
+def setup_chinese_font() -> tuple[bool, str | None]:
     """检测并设置中文字体，返回 (是否成功, 使用的字体名)。
 
     如果系统无中文字体，打印 Warning 并启用英文标签模式。
@@ -57,7 +57,7 @@ def setup_chinese_font():
     return _HAS_CHINESE_FONT
 
 
-def get_label(key):
+def get_label(key: str) -> str:
     """根据中文字体是否可用，返回中文或英文 label。
 
     Args:

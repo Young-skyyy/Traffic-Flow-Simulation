@@ -3,6 +3,8 @@
 车辆基本参数 + 行驶阻力 + 加速/制动/跟车
 """
 
+from __future__ import annotations
+
 import math
 
 from _constants import G, RHO_AIR, KMH_TO_MS, MS_TO_KMH, DEFAULT_ROLLING_COEFF
@@ -11,41 +13,54 @@ from _constants import G, RHO_AIR, KMH_TO_MS, MS_TO_KMH, DEFAULT_ROLLING_COEFF
 class Vehicle:
     """一辆车的物理参数 + 动力总成参数"""
 
-    def __init__(self, name, mass_kg, power_kw, drag_coeff=0.3, frontal_area_m2=2.2,
-                 max_torque_nm=180, idle_rpm=800, max_rpm=6000,
-                 gear_ratios=None, final_drive=4.0, wheel_radius_m=0.32,
-                 trans_efficiency=0.90, fuel_density_gl=740, fuel_type="gasoline",
+    def __init__(self,
+                 name: str,
+                 mass_kg: float,
+                 power_kw: float,
+                 drag_coeff: float = 0.3,
+                 frontal_area_m2: float = 2.2,
+                 max_torque_nm: float = 180,
+                 idle_rpm: float = 800,
+                 max_rpm: float = 6000,
+                 gear_ratios: list[float] | None = None,
+                 final_drive: float = 4.0,
+                 wheel_radius_m: float = 0.32,
+                 trans_efficiency: float = 0.90,
+                 fuel_density_gl: float = 740,
+                 fuel_type: str = "gasoline",
                  # 横向动力学参数
-                 wheelbase_m=None, cg_to_front_m=None,
-                 cornering_stiffness_f=None, cornering_stiffness_r=None,
-                 yaw_inertia=None):
-        self.name = name
-        self.mass = mass_kg
-        self.power = power_kw * 1000          # 发动机功率（W）
-        self.cd = drag_coeff
-        self.area = frontal_area_m2
-        self.rolling_coeff = DEFAULT_ROLLING_COEFF
+                 wheelbase_m: float | None = None,
+                 cg_to_front_m: float | None = None,
+                 cornering_stiffness_f: float | None = None,
+                 cornering_stiffness_r: float | None = None,
+                 yaw_inertia: float | None = None):
+        self.name: str = name
+        self.mass: float = mass_kg
+        self.power: float = power_kw * 1000          # 发动机功率（W）
+        self.cd: float = drag_coeff
+        self.area: float = frontal_area_m2
+        self.rolling_coeff: float = DEFAULT_ROLLING_COEFF
         # 动力总成参数
-        self.max_torque = max_torque_nm       # 发动机最大扭矩（Nm）
-        self.idle_rpm = idle_rpm
-        self.max_rpm = max_rpm
-        self.gear_ratios = gear_ratios or [3.55, 2.11, 1.42, 1.00, 0.78]  # 各档速比
-        self.final_drive = final_drive        # 主减速比
-        self.wheel_radius = wheel_radius_m    # 轮胎滚动半径（m）
-        self.trans_efficiency = trans_efficiency  # 传动效率
-        self.fuel_density = fuel_density_gl   # 燃油密度（g/L），汽油 740，柴油 840
-        self.fuel_type = fuel_type
+        self.max_torque: float = max_torque_nm       # 发动机最大扭矩（Nm）
+        self.idle_rpm: float = idle_rpm
+        self.max_rpm: float = max_rpm
+        self.gear_ratios: list[float] = gear_ratios or [3.55, 2.11, 1.42, 1.00, 0.78]
+        self.final_drive: float = final_drive        # 主减速比
+        self.wheel_radius: float = wheel_radius_m    # 轮胎滚动半径（m）
+        self.trans_efficiency: float = trans_efficiency  # 传动效率
+        self.fuel_density: float = fuel_density_gl   # 燃油密度（g/L），汽油 740，柴油 840
+        self.fuel_type: str = fuel_type
         # 横向动力学参数
-        self.wheelbase = wheelbase_m or 2.65          # 轴距（m），典型轿车
-        self.cg_to_front = cg_to_front_m or self.wheelbase * 0.45  # 质心到前轴距离（m）
-        self.cg_to_rear = self.wheelbase - self.cg_to_front         # 质心到后轴距离（m）
+        self.wheelbase: float = wheelbase_m or 2.65          # 轴距（m），典型轿车
+        self.cg_to_front: float = cg_to_front_m or self.wheelbase * 0.45  # 质心到前轴距离（m）
+        self.cg_to_rear: float = self.wheelbase - self.cg_to_front         # 质心到后轴距离（m）
         # 侧偏刚度（N/rad），典型值：前轮 -80000，后轮 -70000（负号表示侧向力与侧偏角反向）
-        self.cornering_stiffness_f = cornering_stiffness_f or 80000
-        self.cornering_stiffness_r = cornering_stiffness_r or 70000
+        self.cornering_stiffness_f: float = cornering_stiffness_f or 80000
+        self.cornering_stiffness_r: float = cornering_stiffness_r or 70000
         # 横摆转动惯量（kg·m²），估算公式 Iz ≈ m × a × b
-        self.yaw_inertia = yaw_inertia or self.mass * self.cg_to_front * self.cg_to_rear
+        self.yaw_inertia: float = yaw_inertia or self.mass * self.cg_to_front * self.cg_to_rear
 
-    def select_gear(self, speed_kmh):
+    def select_gear(self, speed_kmh: float) -> int:
         """根据车速选择合适档位（简化的经济性换挡策略）"""
         if speed_kmh <= 0:
             return 0
@@ -65,26 +80,26 @@ class Vehicle:
                 best_gear = g
         return best_gear
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.name} ({self.mass}kg, {self.power/1000:.0f}kW)"
 
 
 # 定义三辆车做对比（含动力总成参数）
-car_sedan = Vehicle("普通轿车", 1500, 100, drag_coeff=0.28,
+car_sedan: Vehicle = Vehicle("普通轿车", 1500, 100, drag_coeff=0.28,
                     max_torque_nm=180, idle_rpm=800, max_rpm=6200,
                     gear_ratios=[3.55, 2.11, 1.42, 1.00, 0.78],
                     final_drive=4.06, wheel_radius_m=0.32, trans_efficiency=0.90,
                     fuel_density_gl=740, fuel_type="gasoline",
                     wheelbase_m=2.65, cg_to_front_m=1.2,
                     cornering_stiffness_f=80000, cornering_stiffness_r=70000)
-car_suv = Vehicle("SUV", 2000, 140, drag_coeff=0.35, frontal_area_m2=2.7,
+car_suv: Vehicle = Vehicle("SUV", 2000, 140, drag_coeff=0.35, frontal_area_m2=2.7,
                   max_torque_nm=250, idle_rpm=700, max_rpm=6000,
                   gear_ratios=[3.83, 2.36, 1.55, 1.00, 0.79],
                   final_drive=3.89, wheel_radius_m=0.36, trans_efficiency=0.88,
                   fuel_density_gl=740, fuel_type="gasoline",
                   wheelbase_m=2.75, cg_to_front_m=1.3,
                   cornering_stiffness_f=90000, cornering_stiffness_r=75000)
-car_truck = Vehicle("重型卡车", 15000, 300, drag_coeff=0.65, frontal_area_m2=7.0,
+car_truck: Vehicle = Vehicle("重型卡车", 15000, 300, drag_coeff=0.65, frontal_area_m2=7.0,
                     max_torque_nm=1000, idle_rpm=600, max_rpm=4000,
                     gear_ratios=[5.50, 3.20, 1.90, 1.00, 0.73],
                     final_drive=4.30, wheel_radius_m=0.52, trans_efficiency=0.85,
@@ -93,7 +108,7 @@ car_truck = Vehicle("重型卡车", 15000, 300, drag_coeff=0.65, frontal_area_m2
                     cornering_stiffness_f=200000, cornering_stiffness_r=180000)
 
 
-def rolling_coeff_dynamic(speed_ms):
+def rolling_coeff_dynamic(speed_ms: float) -> float:
     """SAE J2263 滑行阻力: μ(v) = f₀ + f₁·(v/100) + f₄·(v/100)⁴"""
     v = speed_ms * MS_TO_KMH            # m/s → km/h
     f0 = 0.010                    # 截距项
@@ -102,9 +117,8 @@ def rolling_coeff_dynamic(speed_ms):
     return f0 + f1 * (v / 100) + f4 * (v / 100) ** 4
 
 
-def calc_resistance(vehicle, speed_ms, dynamic_rr=False):
+def calc_resistance(vehicle: Vehicle, speed_ms: float, dynamic_rr: bool = False) -> float:
     """计算总阻力(N): 滚动阻力 + 空气阻力, dynamic_rr 切换 SAE J2263 动态模型"""
-    # 滚动阻力：F = μ × m × g
     if dynamic_rr:
         coeff = rolling_coeff_dynamic(speed_ms)
     else:
@@ -118,7 +132,7 @@ def calc_resistance(vehicle, speed_ms, dynamic_rr=False):
     return rolling + aero
 
 
-def calc_acceleration(vehicle, speed_ms):
+def calc_acceleration(vehicle: Vehicle, speed_ms: float) -> float:
     """计算车辆在当前速度下的加速度（m/s²）"""
     resistance = calc_resistance(vehicle, speed_ms)
     # 驱动力 = 功率 / 速度（P = F × v）
@@ -129,28 +143,18 @@ def calc_acceleration(vehicle, speed_ms):
     return max(0, net_force / vehicle.mass)
 
 
-def simulate_acceleration(vehicle, target_speed_kmh=100, dt=0.1):
-    """模拟车辆从 0 加速到目标速度的过程，返回结构化数据。
-
-    Returns:
-        dict: {
-            "time":       list[float]  时间序列 (s),
-            "speed_kmh":  list[float]  速度序列 (km/h),
-            "acc_ms2":    list[float]  加速度序列 (m/s²),
-            "distance_m": list[float]  距离序列 (m),
-            "elapsed_s":  float        达到目标车速耗时,
-            "total_dist_m": float      总行驶距离,
-        }
-    """
+def simulate_acceleration(vehicle: Vehicle, target_speed_kmh: float = 100,
+                          dt: float = 0.1) -> dict:
+    """模拟车辆从 0 加速到目标速度的过程，返回结构化数据。"""
     target = target_speed_kmh * KMH_TO_MS  # km/h → m/s
     speed = 1.0  # 从 1 m/s 起步（避免除以零）
-    distance = 0
-    time_elapsed = 0
+    distance = 0.0
+    time_elapsed = 0.0
 
-    time_series = []
-    speed_series = []
-    acc_series = []
-    dist_series = []
+    time_series: list[float] = []
+    speed_series: list[float] = []
+    acc_series: list[float] = []
+    dist_series: list[float] = []
 
     while speed < target and time_elapsed < 120:  # 最长模拟 120 秒
         acc = calc_acceleration(vehicle, speed)
@@ -173,7 +177,8 @@ def simulate_acceleration(vehicle, target_speed_kmh=100, dt=0.1):
     }
 
 
-def calc_braking_distance(speed_kmh, friction_coeff=0.7, reaction_time=1.5):
+def calc_braking_distance(speed_kmh: float, friction_coeff: float = 0.7,
+                          reaction_time: float = 1.5) -> tuple[float, float, float]:
     """计算制动总距离 = 反应距离 + 制动距离"""
     speed_ms = speed_kmh * KMH_TO_MS
 
@@ -187,32 +192,29 @@ def calc_braking_distance(speed_kmh, friction_coeff=0.7, reaction_time=1.5):
     return reaction_dist, braking_dist, total
 
 
-def calc_grade_power(vehicle, speed_ms, grade_percent=5):
+def calc_grade_power(vehicle: Vehicle, speed_ms: float, grade_percent: float = 5) -> float:
     """爬坡功率: m·g·sin(θ)·v (W)"""
     grade_rad = math.atan(grade_percent / 100)
     grade_force = vehicle.mass * G * math.sin(grade_rad)
     return grade_force * speed_ms
 
 
-def calc_power_to_weight(vehicle):
+def calc_power_to_weight(vehicle: Vehicle) -> tuple[float, float]:
     """比功率 = 发动机最大功率 / 整车质量 (W/kg)"""
     watt_per_kg = vehicle.power / vehicle.mass
     kw_per_ton = watt_per_kg  # W/kg == kW/ton（因为 1 kW / 1000 kg = 1 W/kg）
     return watt_per_kg, kw_per_ton
 
 
-def calc_aero_drag_power(vehicle, speed_ms):
+def calc_aero_drag_power(vehicle: Vehicle, speed_ms: float) -> float:
     """风阻功率 0.5·ρ·Cd·A·v³ (W)"""
     aero_force = 0.5 * RHO_AIR * vehicle.cd * vehicle.area * speed_ms ** 2
     return aero_force * speed_ms
 
 
-def calc_power_breakdown(vehicle, speed_kmh=100, grade_percent=5):
-    """车辆在指定工况下的各功率分解，返回结构化数据。
-
-    Returns:
-        dict: 各功率分量（W）及汇总指标
-    """
+def calc_power_breakdown(vehicle: Vehicle, speed_kmh: float = 100,
+                         grade_percent: float = 5) -> dict:
+    """车辆在指定工况下的各功率分解，返回结构化数据。"""
     speed_ms = speed_kmh * KMH_TO_MS
 
     rolling_power_const = vehicle.rolling_coeff * vehicle.mass * G * speed_ms
@@ -240,13 +242,9 @@ def calc_power_breakdown(vehicle, speed_kmh=100, grade_percent=5):
     }
 
 
-def calc_braking_table():
-    """计算不同车速下的制动距离，返回结构化数据。
-
-    Returns:
-        list[dict]: 各车速的制动距离明细
-    """
-    results = []
+def calc_braking_table() -> list[dict]:
+    """计算不同车速下的制动距离，返回结构化数据。"""
+    results: list[dict] = []
     for v in [30, 50, 60, 80, 100, 120]:
         rd, bd, td = calc_braking_distance(v)
         results.append({
@@ -258,20 +256,14 @@ def calc_braking_table():
     return results
 
 
-def car_following_simulation(lead_speed_kmh=60, follower_speed_kmh=70,
-                              initial_gap_m=30, reaction_time=1.5, duration_s=30):
+def car_following_simulation(lead_speed_kmh: float = 60,
+                             follower_speed_kmh: float = 70,
+                             initial_gap_m: float = 30,
+                             reaction_time: float = 1.5,
+                             duration_s: int = 30) -> dict:
     """模拟后车跟随前车：前车匀速，后车需要减速避免碰撞。
 
     修复点：用数值积分累积位置，替代原来错误的 t*speed 匀速假设。
-
-    Returns:
-        dict: {
-            "time":           list[float]  时间序列 (s),
-            "gap_m":          list[float]  车间距 (m),
-            "follower_kmh":   list[float]  后车速度 (km/h),
-            "status":         list[str]    状态标签,
-            "collision_s":    float|None   碰撞时间，无碰撞则为 None,
-        }
     """
     lead_speed = lead_speed_kmh * KMH_TO_MS
     follower_speed = follower_speed_kmh * KMH_TO_MS
@@ -282,11 +274,11 @@ def car_following_simulation(lead_speed_kmh=60, follower_speed_kmh=70,
     follower_pos = -initial_gap_m  # 后车初始落后 initial_gap 米
     gap = initial_gap_m
 
-    time_series = []
-    gap_series = []
-    speed_series = []
-    status_series = []
-    collision_time = None
+    time_series: list[float] = []
+    gap_series: list[float] = []
+    speed_series: list[float] = []
+    status_series: list[str] = []
+    collision_time: float | None = None
 
     for t in range(duration_s):
         # 前车匀速前进
@@ -294,7 +286,7 @@ def car_following_simulation(lead_speed_kmh=60, follower_speed_kmh=70,
 
         # 后车根据间距调整速度
         if gap < 10:
-            follower_speed = max(0, follower_speed - 6 * dt)
+            follower_speed = max(0.0, follower_speed - 6 * dt)
         elif gap < 30:
             follower_speed = max(lead_speed, follower_speed - 2 * dt)
 

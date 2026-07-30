@@ -3,6 +3,8 @@
 CAN 总线多 ECU 仿真器：ECU 报文生成、DBC 导出、ASC 日志、DTC 故障码
 """
 
+from __future__ import annotations
+
 import time
 import random
 import struct
@@ -85,19 +87,20 @@ CAN_MESSAGES = {
 
 # 2. CAN 帧编码/解码
 
-def encode_signal(value, sig):
+def encode_signal(value: float, sig: dict) -> int:
     """将物理值编码为原始整数值"""
     raw = int((value - sig["offset"]) / sig["scale"])
     max_val = (1 << sig["len"]) - 1
     return max(0, min(raw, max_val))
 
 
-def decode_signal(raw, sig):
+def decode_signal(raw: int, sig: dict) -> float:
     """将原始整数值解码为物理值"""
     return round(raw * sig["scale"] + sig["offset"], 2)
 
 
-def _signal_bit_positions(start_bit, length, byte_order):
+def _signal_bit_positions(start_bit: int, length: int,
+                          byte_order: str) -> list[tuple[int, int, int]]:
     """计算信号每个 bit 的 (byte_idx, bit_in_byte, signal_bit_shift)。
 
     - Motorola: MSB first, 字节地址递减跨字节
@@ -134,7 +137,7 @@ def _signal_bit_positions(start_bit, length, byte_order):
     return positions
 
 
-def build_can_frame(msg_def, signal_values):
+def build_can_frame(msg_def: dict, signal_values: list[float]) -> list[int]:
     """根据信号值列表构建 8 字节 CAN 数据帧，支持 Motorola/Intel 字节序。"""
     data = [0] * 8
     for i, sig in enumerate(msg_def["signals"]):
@@ -148,7 +151,7 @@ def build_can_frame(msg_def, signal_values):
     return data
 
 
-def parse_can_frame(data, msg_def):
+def parse_can_frame(data: list[int], msg_def: dict) -> dict[str, float]:
     """根据信号定义解析 8 字节 CAN 数据帧，支持 Motorola/Intel 字节序。"""
     result = {}
     for sig in msg_def["signals"]:
@@ -281,7 +284,7 @@ def generate_frame(name, msg_def, veh, sim_time):
 
 # 5. CAN 总线仿真主循环
 
-def simulate_can_bus(duration_s=5):
+def simulate_can_bus(duration_s: float = 5) -> dict:
     """模拟 CAN 总线运行 duration_s 秒，返回结构化数据。
 
     Returns:
@@ -337,7 +340,7 @@ DTC_DATABASE = {
 }
 
 
-def simulate_dtc_check():
+def simulate_dtc_check() -> dict:
     """模拟诊断仪读取故障码，返回结构化数据。
 
     Returns:
@@ -359,7 +362,7 @@ def simulate_dtc_check():
 # 7. DBC 文件生成器
 # DBC 文件格式：Vector CAN 数据库标准，CANoe / CANalyzer 直接读取。
 
-def generate_dbc(filepath="simulated_ecu.dbc", baudrate=500000):
+def generate_dbc(filepath: str = "simulated_ecu.dbc", baudrate: int = 500000) -> dict:
     """从 CAN_MESSAGES 生成标准 DBC 文件"""
     nodes = sorted(set(
         msg["desc"].split()[0] if msg["desc"] else "ECU"
@@ -418,8 +421,9 @@ def generate_dbc(filepath="simulated_ecu.dbc", baudrate=500000):
 
 # 8. CAN 总线高级仿真（负载率 + ASC + 错误注入）
 
-def simulate_can_bus_advanced(duration_s=10, baudrate=500000,
-                               error_rate=0.001, asc_log="can_log.asc"):
+def simulate_can_bus_advanced(duration_s: float = 10, baudrate: int = 500000,
+                               error_rate: float = 0.001,
+                               asc_log: str | None = "can_log.asc") -> dict:
     """增强版 CAN 仿真: 总线负载统计 + ASC 日志 + 错误帧注入
 
     Returns:
