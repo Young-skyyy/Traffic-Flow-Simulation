@@ -53,10 +53,3 @@ Repository = "https://github.com/Young-skyyy/vehicle-dynamics-toolkit"
 [tool.pytest.ini_options]
 testpaths = ["."]
 python_files = ["test_*.py"]
-
-[tool.setuptools]
-py-modules = [
-    "vehicle", "lateral_dynamics", "bsfc", "wltc",
-    "can_demo", "plotting", "plot_dashboard", "vehicle_dynamics",
-    "_constants", "_plot_utils",
-]
