@@ -17,11 +17,11 @@ CAN_MESSAGES = {
         "cycle_ms": 10,
         "desc": "发动机数据",
         "signals": [
-            {"name": "节气门位置",   "start": 0,  "len": 8,  "scale": 0.4,   "offset": 0,    "unit": "%"},
-            {"name": "发动机转速",   "start": 8,  "len": 16, "scale": 0.25,  "offset": 0,    "unit": "rpm"},
-            {"name": "冷却液温度",   "start": 24, "len": 8,  "scale": 1,     "offset": -40,  "unit": "degC"},
-            {"name": "车速",         "start": 32, "len": 16, "scale": 0.01,  "offset": 0,    "unit": "km/h"},
-            {"name": "进气歧管压力", "start": 48, "len": 8,  "scale": 1,     "offset": 0,    "unit": "kPa"},
+            {"name": "节气门位置",   "start": 0,  "len": 8,  "scale": 0.4,   "offset": 0,    "unit": "%",  "byte_order": "motorola"},
+            {"name": "发动机转速",   "start": 8,  "len": 16, "scale": 0.25,  "offset": 0,    "unit": "rpm", "byte_order": "motorola"},
+            {"name": "冷却液温度",   "start": 24, "len": 8,  "scale": 1,     "offset": -40,  "unit": "degC", "byte_order": "motorola"},
+            {"name": "车速",         "start": 32, "len": 16, "scale": 0.01,  "offset": 0,    "unit": "km/h", "byte_order": "intel"},
+            {"name": "进气歧管压力", "start": 48, "len": 8,  "scale": 1,     "offset": 0,    "unit": "kPa", "byte_order": "motorola"},
         ],
     },
 
@@ -31,11 +31,11 @@ CAN_MESSAGES = {
         "cycle_ms": 100,
         "desc": "电池状态",
         "signals": [
-            {"name": "SOC",          "start": 0,  "len": 8,  "scale": 0.5,   "offset": 0,   "unit": "%"},
-            {"name": "总电压",       "start": 8,  "len": 16, "scale": 0.1,   "offset": 0,   "unit": "V"},
-            {"name": "电流",         "start": 24, "len": 16, "scale": 0.1,   "offset": -500, "unit": "A"},
-            {"name": "最高单体温度",  "start": 40, "len": 8,  "scale": 1,     "offset": -40, "unit": "degC"},
-            {"name": "最低单体温度",  "start": 48, "len": 8,  "scale": 1,     "offset": -40, "unit": "degC"},
+            {"name": "SOC",          "start": 0,  "len": 8,  "scale": 0.5,   "offset": 0,   "unit": "%",     "byte_order": "motorola"},
+            {"name": "总电压",       "start": 8,  "len": 16, "scale": 0.1,   "offset": 0,   "unit": "V",     "byte_order": "motorola"},
+            {"name": "电流",         "start": 24, "len": 16, "scale": 0.1,   "offset": -500, "unit": "A",    "byte_order": "motorola"},
+            {"name": "最高单体温度",  "start": 40, "len": 8,  "scale": 1,     "offset": -40, "unit": "degC",  "byte_order": "motorola"},
+            {"name": "最低单体温度",  "start": 48, "len": 8,  "scale": 1,     "offset": -40, "unit": "degC",  "byte_order": "motorola"},
         ],
     },
 
@@ -45,10 +45,10 @@ CAN_MESSAGES = {
         "cycle_ms": 20,
         "desc": "轮速与制动",
         "signals": [
-            {"name": "左前轮速",    "start": 0,  "len": 16, "scale": 0.01,  "offset": 0,   "unit": "km/h"},
-            {"name": "右前轮速",    "start": 16, "len": 16, "scale": 0.01,  "offset": 0,   "unit": "km/h"},
-            {"name": "左后轮速",    "start": 32, "len": 16, "scale": 0.01,  "offset": 0,   "unit": "km/h"},
-            {"name": "右后轮速",    "start": 48, "len": 16, "scale": 0.01,  "offset": 0,   "unit": "km/h"},
+            {"name": "左前轮速",    "start": 0,  "len": 16, "scale": 0.01,  "offset": 0,   "unit": "km/h", "byte_order": "motorola"},
+            {"name": "右前轮速",    "start": 16, "len": 16, "scale": 0.01,  "offset": 0,   "unit": "km/h", "byte_order": "motorola"},
+            {"name": "左后轮速",    "start": 32, "len": 16, "scale": 0.01,  "offset": 0,   "unit": "km/h", "byte_order": "motorola"},
+            {"name": "右后轮速",    "start": 48, "len": 16, "scale": 0.01,  "offset": 0,   "unit": "km/h", "byte_order": "motorola"},
         ],
     },
 
@@ -58,9 +58,9 @@ CAN_MESSAGES = {
         "cycle_ms": 50,
         "desc": "变速箱状态",
         "signals": [
-            {"name": "当前档位",   "start": 0,  "len": 4,  "scale": 1,   "offset": 0,   "unit": ""},
-            {"name": "变速箱油温", "start": 8,  "len": 8,  "scale": 1,   "offset": -40, "unit": "degC"},
-            {"name": "输出轴转速", "start": 16, "len": 16, "scale": 1,   "offset": 0,   "unit": "rpm"},
+            {"name": "当前档位",   "start": 0,  "len": 4,  "scale": 1,   "offset": 0,   "unit": "",     "byte_order": "motorola"},
+            {"name": "变速箱油温", "start": 8,  "len": 8,  "scale": 1,   "offset": -40, "unit": "degC",  "byte_order": "motorola"},
+            {"name": "输出轴转速", "start": 16, "len": 16, "scale": 1,   "offset": 0,   "unit": "rpm",  "byte_order": "motorola"},
         ],
     },
 
@@ -70,14 +70,14 @@ CAN_MESSAGES = {
         "cycle_ms": 200,
         "desc": "车身状态",
         "signals": [
-            {"name": "左前门",     "start": 0,  "len": 2,  "scale": 1, "offset": 0, "unit": ""},
-            {"name": "右前门",     "start": 2,  "len": 2,  "scale": 1, "offset": 0, "unit": ""},
-            {"name": "左后门",     "start": 4,  "len": 2,  "scale": 1, "offset": 0, "unit": ""},
-            {"name": "右后门",     "start": 6,  "len": 2,  "scale": 1, "offset": 0, "unit": ""},
-            {"name": "近光灯",     "start": 8,  "len": 2,  "scale": 1, "offset": 0, "unit": ""},
-            {"name": "远光灯",     "start": 10, "len": 2,  "scale": 1, "offset": 0, "unit": ""},
-            {"name": "转向灯",     "start": 12, "len": 2,  "scale": 1, "offset": 0, "unit": ""},
-            {"name": "后备箱",     "start": 14, "len": 2,  "scale": 1, "offset": 0, "unit": ""},
+            {"name": "左前门",     "start": 0,  "len": 2,  "scale": 1, "offset": 0, "unit": "", "byte_order": "motorola"},
+            {"name": "右前门",     "start": 2,  "len": 2,  "scale": 1, "offset": 0, "unit": "", "byte_order": "motorola"},
+            {"name": "左后门",     "start": 4,  "len": 2,  "scale": 1, "offset": 0, "unit": "", "byte_order": "motorola"},
+            {"name": "右后门",     "start": 6,  "len": 2,  "scale": 1, "offset": 0, "unit": "", "byte_order": "motorola"},
+            {"name": "近光灯",     "start": 8,  "len": 2,  "scale": 1, "offset": 0, "unit": "", "byte_order": "motorola"},
+            {"name": "远光灯",     "start": 10, "len": 2,  "scale": 1, "offset": 0, "unit": "", "byte_order": "motorola"},
+            {"name": "转向灯",     "start": 12, "len": 2,  "scale": 1, "offset": 0, "unit": "", "byte_order": "motorola"},
+            {"name": "后备箱",     "start": 14, "len": 2,  "scale": 1, "offset": 0, "unit": "", "byte_order": "motorola"},
         ],
     },
 }
@@ -97,33 +97,69 @@ def decode_signal(raw, sig):
     return round(raw * sig["scale"] + sig["offset"], 2)
 
 
+def _signal_bit_positions(start_bit, length, byte_order):
+    """计算信号每个 bit 的 (byte_idx, bit_in_byte, signal_bit_shift)。
+
+    - Motorola: MSB first, 字节地址递减跨字节
+    - Intel:    LSB first, 字节地址递增跨字节
+
+    Returns:
+        list of (byte_idx, bit_in_byte, shift) tuples, length 个
+    """
+    positions = []
+    start_byte = start_bit // 8
+    start_bit_in_byte = start_bit % 8
+
+    for i in range(length):
+        byte_ofs = i // 8
+        bit_ofs = i % 8
+
+        if byte_order == "intel":
+            byte_idx = start_byte + byte_ofs
+            bit_in_byte = start_bit_in_byte + bit_ofs
+            if bit_in_byte >= 8:
+                byte_idx += 1
+                bit_in_byte -= 8
+            shift = i  # LSB first
+        else:  # motorola
+            byte_idx = start_byte - byte_ofs
+            bit_in_byte = start_bit_in_byte + bit_ofs
+            if bit_in_byte >= 8:
+                byte_idx += 1
+                bit_in_byte -= 8
+            shift = length - 1 - i  # MSB first
+
+        positions.append((byte_idx, bit_in_byte, shift))
+
+    return positions
+
+
 def build_can_frame(msg_def, signal_values):
-    """根据信号值列表构建 8 字节 CAN 数据帧"""
+    """根据信号值列表构建 8 字节 CAN 数据帧，支持 Motorola/Intel 字节序。"""
     data = [0] * 8
     for i, sig in enumerate(msg_def["signals"]):
         raw = encode_signal(signal_values[i], sig)
-        start_bit = sig["start"]
-        # 按 Motorola 序写入（大端）
-        for bit in range(sig["len"]):
-            byte_idx = (start_bit + bit) // 8
-            bit_idx = 7 - ((start_bit + bit) % 8)
-            if byte_idx < 8:
-                if raw & (1 << (sig["len"] - 1 - bit)):
-                    data[byte_idx] |= (1 << bit_idx)
+        byte_order = sig.get("byte_order", "motorola")
+        positions = _signal_bit_positions(sig["start"], sig["len"], byte_order)
+
+        for byte_idx, bit_in_byte, shift in positions:
+            if byte_idx < 8 and (raw >> shift) & 1:
+                data[byte_idx] |= (1 << bit_in_byte)
     return data
 
 
 def parse_can_frame(data, msg_def):
-    """根据信号定义解析 8 字节 CAN 数据帧"""
+    """根据信号定义解析 8 字节 CAN 数据帧，支持 Motorola/Intel 字节序。"""
     result = {}
     for sig in msg_def["signals"]:
         raw = 0
-        start_bit = sig["start"]
-        for bit in range(sig["len"]):
-            byte_idx = (start_bit + bit) // 8
-            bit_idx = 7 - ((start_bit + bit) % 8)
-            if byte_idx < 8 and (data[byte_idx] & (1 << bit_idx)):
-                raw |= (1 << (sig["len"] - 1 - bit))
+        byte_order = sig.get("byte_order", "motorola")
+        positions = _signal_bit_positions(sig["start"], sig["len"], byte_order)
+
+        for byte_idx, bit_in_byte, shift in positions:
+            if byte_idx < 8 and (data[byte_idx] >> bit_in_byte) & 1:
+                raw |= (1 << shift)
+
         result[sig["name"]] = decode_signal(raw, sig)
     return result
 
@@ -183,7 +219,67 @@ class VehicleECU:
         self.brake_pressure = random.uniform(0, 5) if not self.accelerating else 0
 
 
-# 4. CAN 总线仿真主循环
+# 4. CAN 帧信号生成器 —— 每个 ECU 类型一个独立函数，通过字典 dispatch
+
+def _gen_engine_data(veh, sim_time):
+    """EMS 发动机数据信号值"""
+    return [veh.throttle, veh.rpm, veh.coolant_temp, veh.speed, random.randint(30, 50)]
+
+
+def _gen_battery_status(veh, sim_time):
+    """BMS 电池状态信号值"""
+    return [veh.soc, random.uniform(350, 400), random.uniform(-10, 50),
+            random.uniform(25, 35), random.uniform(22, 30)]
+
+
+def _gen_abs_wheel_speed(veh, sim_time):
+    """ABS 四轮轮速信号值"""
+    base = veh.speed
+    return [base + random.uniform(-0.5, 0.5),
+            base + random.uniform(-0.5, 0.5),
+            base + random.uniform(-0.3, 0.3),
+            base + random.uniform(-0.3, 0.3)]
+
+
+def _gen_transmission(veh, sim_time):
+    """TCU 变速箱状态信号值"""
+    return [veh.gear, veh.coolant_temp + 10, veh.rpm]
+
+
+def _gen_body_control(veh, sim_time):
+    """BCM 车身控制信号值（0=关闭 1=打开 2=故障 3=无效）"""
+    return [
+        0, 0, 0, 0,                           # 四门关闭
+        1 if sim_time > 2 else 0,              # 近光灯（2秒后开启）
+        0, 0,                                  # 远光/转向灯关
+        0,                                      # 后备箱关
+    ]
+
+
+# ECU 名称 → 信号生成函数 映射表
+_FRAME_GENERATORS = {
+    "EngineData":      _gen_engine_data,
+    "BatteryStatus":   _gen_battery_status,
+    "ABS_WheelSpeed":  _gen_abs_wheel_speed,
+    "Transmission":    _gen_transmission,
+    "BodyControl":     _gen_body_control,
+}
+
+
+def generate_frame(name, msg_def, veh, sim_time):
+    """根据 ECU 类型和当前车辆状态，生成 8 字节 CAN 数据帧。
+
+    通过 _FRAME_GENERATORS 字典 dispatch 到对应信号生成函数，
+    新增 ECU 只需添加函数 + 字典条目。
+    """
+    generator = _FRAME_GENERATORS.get(name)
+    if generator is None:
+        raise ValueError(f"未知的 ECU 消息类型: {name}")
+    signal_values = generator(veh, sim_time)
+    return build_can_frame(msg_def, signal_values)
+
+
+# 5. CAN 总线仿真主循环
 
 def simulate_can_bus(duration_s=5):
     """模拟 CAN 总线运行 duration_s 秒，返回结构化数据。
@@ -229,49 +325,7 @@ def simulate_can_bus(duration_s=5):
     }
 
 
-def generate_frame(name, msg_def, veh, sim_time):
-    """根据 ECU 类型和当前车辆状态，生成 8 字节 CAN 数据"""
-    if name == "EngineData":
-        return build_can_frame(msg_def, [
-            veh.throttle,
-            veh.rpm,
-            veh.coolant_temp,
-            veh.speed,
-            random.randint(30, 50),  # 进气压力
-        ])
-    elif name == "BatteryStatus":
-        return build_can_frame(msg_def, [
-            veh.soc,
-            random.uniform(350, 400),
-            random.uniform(-10, 50),
-            random.uniform(25, 35),
-            random.uniform(22, 30),
-        ])
-    elif name == "ABS_WheelSpeed":
-        base = veh.speed
-        return build_can_frame(msg_def, [
-            base + random.uniform(-0.5, 0.5),
-            base + random.uniform(-0.5, 0.5),
-            base + random.uniform(-0.3, 0.3),
-            base + random.uniform(-0.3, 0.3),
-        ])
-    elif name == "Transmission":
-        return build_can_frame(msg_def, [
-            veh.gear,
-            veh.coolant_temp + 10,
-            veh.rpm,
-        ])
-    elif name == "BodyControl":
-        # 0=关闭 1=打开 2=故障 3=无效
-        return build_can_frame(msg_def, [
-            0, 0, 0, 0,  # 四门关闭
-            1 if sim_time > 2 else 0,  # 近光灯
-            0, 0,  # 远光/转向灯关
-            0,  # 后备箱关
-        ])
-
-
-# 5. DTC 故障码仿真
+# 6. DTC 故障码仿真
 
 DTC_DATABASE = {
     "P0301": {"desc": "1缸失火检测", "ecu": "EMS"},
@@ -331,7 +385,8 @@ def generate_dbc(filepath="simulated_ecu.dbc", baudrate=500000):
             sig_name = sig["name"].replace(" ", "_")
             start = sig["start"]
             length = sig["len"]
-            byte_order = "1"  # Motorola (大端)
+            # DBC: @0 = Motorola (大端), @1 = Intel (小端)
+            byte_order = "0" if sig.get("byte_order", "motorola") == "motorola" else "1"
             signed = "-" if sig["offset"] < 0 else "+"
             scale = sig["scale"]
             offset = sig["offset"]

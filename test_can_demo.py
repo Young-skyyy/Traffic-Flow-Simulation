@@ -14,6 +14,7 @@ from can_demo import (
     generate_dbc,
     simulate_dtc_check,
     generate_frame,
+    _signal_bit_positions,
 )
 
 
@@ -241,6 +242,16 @@ class TestDBCGeneration:
         assert "SG_" in content
         assert "GenMsgCycleTime" in content
 
+    def test_dbc_intel_byte_order(self, tmp_path):
+        """车速信号设为 Intel 字节序，DBC 应输出 @1"""
+        filepath = str(tmp_path / "test.dbc")
+        generate_dbc(filepath=filepath)
+        with open(filepath, "r", encoding="utf-8") as f:
+            content = f.read()
+        # "车速" signal is Intel → DBC 输出 @1
+        assert "车速" in content
+        assert "@1" in content  # 至少有一个 Intel 信号
+
     def test_teardown_cleanup(self, tmp_path):
         """Generated file should be valid and not empty."""
         filepath = str(tmp_path / "test.dbc")
@@ -258,7 +269,7 @@ class TestCANMessages:
                 assert field in msg, f"{name} missing {field}"
 
     def test_all_signals_have_required_fields(self):
-        required = {"name", "start", "len", "scale", "offset", "unit"}
+        required = {"name", "start", "len", "scale", "offset", "unit", "byte_order"}
         for name, msg in CAN_MESSAGES.items():
             for sig in msg["signals"]:
                 for field in required:
@@ -281,3 +292,67 @@ class TestCANMessages:
                 assert sig["start"] + sig["len"] <= 64, (
                     f"{name}.{sig['name']} exceeds 64 bits"
                 )
+
+    def test_byte_order_values_are_valid(self):
+        """byte_order 只能是 motorola 或 intel"""
+        for name, msg in CAN_MESSAGES.items():
+            for sig in msg["signals"]:
+                bo = sig["byte_order"]
+                assert bo in ("motorola", "intel"), (
+                    f"{name}.{sig['name']} invalid byte_order: {bo}"
+                )
+
+
+class TestIntelByteOrder:
+    """Intel (小端) 字节序编解码 roundtrip 测试"""
+
+    @pytest.fixture
+    def intel_msg(self):
+        return {
+            "id": 0x100,
+            "cycle_ms": 10,
+            "desc": "Intel 测试报文",
+            "signals": [
+                {"name": "sig16", "start": 8,  "len": 16, "scale": 0.1, "offset": 0, "unit": "", "byte_order": "intel"},
+                {"name": "sig8",  "start": 0,  "len": 8,  "scale": 1,   "offset": 0, "unit": "", "byte_order": "motorola"},
+                {"name": "sig32", "start": 24, "len": 32, "scale": 0.01, "offset": 0, "unit": "", "byte_order": "intel"},
+            ],
+        }
+
+    def test_intel_16bit_roundtrip(self, intel_msg):
+        """sig16 scale=0.1, 物理值 50.0 → raw=500 → 应解码回 50.0"""
+        data = build_can_frame(intel_msg, [50.0, 0, 0])
+        parsed = parse_can_frame(data, intel_msg)
+        assert parsed["sig16"] == pytest.approx(50.0, rel=0.05)
+
+    def test_intel_32bit_roundtrip(self, intel_msg):
+        """sig32 scale=0.01, 物理值 987.65 → raw=98765 → 应解码回 987.65"""
+        data = build_can_frame(intel_msg, [0, 0, 987.65])
+        parsed = parse_can_frame(data, intel_msg)
+        assert parsed["sig32"] == pytest.approx(987.65, rel=0.01)
+
+    def test_mixed_byte_order_roundtrip(self, intel_msg):
+        """同一报文内 Motorola + Intel 信号混合编解码"""
+        data = build_can_frame(intel_msg, [50.0, 200, 100.0])
+        parsed = parse_can_frame(data, intel_msg)
+        assert parsed["sig8"]  == pytest.approx(200, rel=0.05)
+        assert parsed["sig16"] == pytest.approx(50.0, rel=0.05)
+        assert parsed["sig32"] == pytest.approx(100.0, rel=0.01)
+
+    def test_intel_signal_bit_positions(self):
+        """验证 Intel 16-bit 信号从 start_bit=8 的位布局"""
+        positions = _signal_bit_positions(start_bit=8, length=16, byte_order="intel")
+        # Intel LSB first: i=0→bit 8, i=15→bit 23
+        assert positions[0] == (1, 0, 0)     # byte 1, bit 0, shift 0 (LSB)
+        assert positions[7] == (1, 7, 7)     # byte 1, bit 7, shift 7
+        assert positions[8] == (2, 0, 8)     # byte 2, bit 0, shift 8
+        assert positions[15] == (2, 7, 15)   # byte 2, bit 7, shift 15 (MSB)
+
+    def test_motorola_signal_bit_positions(self):
+        """验证 Motorola 16-bit 信号从 start_bit=24 的位布局"""
+        positions = _signal_bit_positions(start_bit=24, length=16, byte_order="motorola")
+        # Motorola MSB first: i=0→bit 24, i=15→bit 23
+        assert positions[0] == (3, 0, 15)    # byte 3, bit 0, shift 15 (MSB)
+        assert positions[7] == (3, 7, 8)     # byte 3, bit 7, shift 8
+        assert positions[8] == (2, 0, 7)     # byte 2, bit 0, shift 7
+        assert positions[15] == (2, 7, 0)    # byte 2, bit 7, shift 0 (LSB)
