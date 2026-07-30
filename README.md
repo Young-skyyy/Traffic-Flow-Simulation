@@ -1,6 +1,8 @@
 # Vehicle Dynamics Engineering Toolkit — SAE J2263 · BSFC Map · CAN Bus
 
-Python 车辆动力学工程工具包。覆盖纵向动力学（SAE J2263 动态滚动阻力/加速/制动/WLTC油耗/功率分解）与横向动力学（2-DOF自行车模型/不足转向梯度/阶跃瞬态响应），含 5-ECU CAN 总线仿真，84 条 pytest 测试。
+Python 车辆动力学工程工具包。纵向（SAE J2263/WLTC/BSFC）+ 横向（自行车模型/不足转向）+ 5-ECU CAN 总线仿真（Motorola/Intel 双字节序），126 条 pytest + GitHub Actions CI，适合车企软件测试/动力总成仿真方向面试展示。
+
+![Dashboard](dashboard_20260730_123532.png)
 
 ## 项目结构
 
@@ -12,10 +14,12 @@ Python 车辆动力学工程工具包。覆盖纵向动力学（SAE J2263 动态
 ├── wltc.py                     # WLTC Class 3 工况、瞬态油耗仿真
 ├── plotting.py                 # BSFC 热力图（三次样条 + contourf）
 ├── plot_dashboard.py           # 四合一汇总图（BSFC+稳态转向+半径+瞬态）
-├── vehicle_dynamics.py         # 主入口：import 汇总 + __main__ runner
+├── vehicle_dynamics.py         # 主入口：import 汇总 + 显示逻辑
 ├── can_demo.py                 # CAN 总线仿真、DBC 生成、错误注入
+├── _constants.py               # 物理常量（G/RHO_AIR/KMH_TO_MS 等）
+├── _plot_utils.py              # 跨平台中文字体检测 + 英文 fallback
 ├── test_vehicle_dynamics.py    # 车辆动力学 pytest 测试（84 条）
-├── test_can_demo.py            # CAN 总线 pytest 测试
+├── test_can_demo.py            # CAN 总线 pytest 测试（42 条）
 ├── requirements.txt            # Python 依赖
 └── README.md
 ```
@@ -49,6 +53,7 @@ Python 车辆动力学工程工具包。覆盖纵向动力学（SAE J2263 动态
 
 ### CAN 总线仿真
 - 5 个模拟 ECU：EMS、BMS、ABS、TCU、BCM
+- **Motorola + Intel 双字节序**编解码，字典 dispatch 架构
 - 自动生成 DBC 文件 + ASC 日志
 - 总线负载监控 + 错误帧注入 + DTC 故障扫描
 
@@ -90,18 +95,11 @@ python plot_dashboard.py
 - BSFC 热力图（`bsfc_map.png`）
 - 四合一汇总仪表盘（`dashboard_*.png`）
 
-## 可视化
-
-### 四合一汇总仪表盘
-![Dashboard](dashboard_20260729_171733.png)
-
-*BSFC 万有特性 / 稳态转向响应 / 转弯半径 vs 车速 / 阶跃转向瞬态响应*
-
 ## 测试
 
 [![pytest](https://github.com/Young-skyyy/vehicle-dynamics-toolkit/actions/workflows/test.yml/badge.svg)](https://github.com/Young-skyyy/vehicle-dynamics-toolkit/actions/workflows/test.yml)
 
-84 条单元测试，覆盖核心函数。本地运行：
+126 条单元测试，覆盖核心函数（84 条动力学 + 42 条 CAN）。本地运行：
 
 ```bash
 pip install pytest
@@ -117,7 +115,7 @@ python -m pytest test_vehicle_dynamics.py test_can_demo.py -v
 - `get_wltc_profile`：WLTC Class 3 数据完整性（1801 数据点）
 - 功率函数：爬坡功率、比功率、风阻功率（v³ 关系）
 - 横向动力学：侧偏角、不足转向梯度、特征/临界车速、稳态转向、阶跃瞬态收敛
-- CAN 信号：编解码、DBC 生成、ECU 状态机
+- CAN 信号：Motorola/Intel 双字节序编解码、DBC 生成、ECU 状态机、位布局算法
 
 ## 关键技术
 
