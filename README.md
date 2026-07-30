@@ -122,7 +122,7 @@ python plot_dashboard.py
 
 ### 五合一汇总仪表盘
 
-![Dashboard](dashboard_20260729_171733.png)
+![Dashboard](dashboard_20260730_141955.png)
 
 *BSFC 万有特性 + 等功率线 / 稳态转向响应 / 转弯半径 vs 车速 / 阶跃转向瞬态响应 / IDM ACC 跟车*
 
