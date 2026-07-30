@@ -24,14 +24,20 @@ def calc_slip_angles(vehicle: Vehicle, vx_ms: float, vy_ms: float,
 
 def calc_cornering_forces(vehicle: Vehicle, alpha_f: float,
                           alpha_r: float) -> tuple[float, float]:
-    """线性轮胎模型: Fy = -C × α (N)"""
+    """线性轮胎模型: Fy = -Cα × α (N)
+
+    Cα 为侧偏刚度 magnitude（正值）。负号体现物理规律：侧偏角为正时侧向力为负（反向）。
+    """
     Fyf = -vehicle.cornering_stiffness_f * alpha_f
     Fyr = -vehicle.cornering_stiffness_r * alpha_r
     return Fyf, Fyr
 
 
 def calc_understeer_gradient(vehicle: Vehicle) -> tuple[float, float]:
-    """不足转向梯度 Kus = Wf/Cf - Wr/Cr (rad/g, deg/g)"""
+    """不足转向梯度 Kus = Wf/Cf - Wr/Cr (rad/g, deg/g)
+
+    Cf, Cr 为侧偏刚度 magnitude（正值）。Kus > 0 = 不足转向，Kus < 0 = 过度转向。
+    """
     m = vehicle.mass
     a = vehicle.cg_to_front
     b = vehicle.cg_to_rear
@@ -152,9 +158,9 @@ def simulate_step_steer(vehicle: Vehicle, vx_kmh: float,
 
 def _classify_steer(kus_deg_per_g: float) -> str:
     """按不足转向梯度分类"""
-    if kus_deg_per_g > 0.5:
+    if kus_deg_per_g > 0.2:
         return "不足转向（稳定）"
-    elif kus_deg_per_g < -0.5:
+    elif kus_deg_per_g < -0.2:
         return "过度转向（不稳定）"
     else:
         return "中性转向"

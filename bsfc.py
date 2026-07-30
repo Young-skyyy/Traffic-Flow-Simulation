@@ -152,7 +152,11 @@ def calc_fuel_table() -> list[dict]:
                 engine_torque = resistance * car.wheel_radius / (total_ratio * car.trans_efficiency)
                 load_ratio = min(1.0, engine_torque / car.max_torque)
                 bsfc = _interpolate_bsfc(engine_rpm, max(0.01, min(1.0, load_ratio)), car.fuel_type)
-                l100 = calc_fuel_consumption(car, v, 100)
+                # 直接用已算出的 bsfc/转速/扭矩 求 L/100km，避免 _calc_l100_raw 重复查表
+                engine_power_kw = engine_torque * engine_rpm * 2 * math.pi / 60 / 1000
+                fuel_mass_rate = bsfc * engine_power_kw / SECONDS_PER_HOUR  # g/s
+                fuel_vol_rate = fuel_mass_rate / car.fuel_density  # L/s
+                l100 = fuel_vol_rate * (SECONDS_PER_HOUR * 100 / v)  # L/100km
             else:
                 engine_rpm, bsfc, l100 = car.idle_rpm, 580, 0
                 load_ratio = 0

@@ -364,11 +364,15 @@ def simulate_dtc_check() -> dict:
 
 def generate_dbc(filepath: str = "simulated_ecu.dbc", baudrate: int = 500000) -> dict:
     """从 CAN_MESSAGES 生成标准 DBC 文件"""
-    nodes = sorted(set(
-        msg["desc"].split()[0] if msg["desc"] else "ECU"
-        for msg in CAN_MESSAGES.values()
-    ))
-    node_names = {name: name for name in ["EMS", "BMS", "ABS", "TCU", "BCM"]}
+    # ECU → 报文映射
+    _MSG_TO_ECU = {
+        "EngineData":     "EMS",
+        "BatteryStatus":  "BMS",
+        "ABS_WheelSpeed": "ABS",
+        "Transmission":   "TCU",
+        "BodyControl":    "BCM",
+    }
+    nodes = sorted(set(_MSG_TO_ECU.values()))
 
     lines = []
     lines.append('VERSION ""\n')
@@ -381,7 +385,7 @@ def generate_dbc(filepath: str = "simulated_ecu.dbc", baudrate: int = 500000) ->
     for msg_name, msg_def in CAN_MESSAGES.items():
         can_id = msg_def["id"]
         dlc = 8
-        transmitter = "EMS"  # 所有报文标 EMS 节点
+        transmitter = _MSG_TO_ECU.get(msg_name, "ECU")
         lines.append(f"\nBO_ {can_id} {msg_name}: {dlc} {transmitter}")
 
         for sig in msg_def["signals"]:

@@ -13,6 +13,9 @@ from vehicle import (
     calc_power_to_weight,
     calc_aero_drag_power,
     rolling_coeff_dynamic,
+    simulate_acceleration,
+    calc_power_breakdown,
+    calc_braking_table,
 )
 from lateral_dynamics import (
     calc_slip_angles,
@@ -22,12 +25,16 @@ from lateral_dynamics import (
     calc_critical_speed,
     calc_steady_state_cornering,
     simulate_step_steer,
+    analyze_lateral,
+    calc_steady_cornering_table,
+    calc_step_steer_response,
 )
 from bsfc import (
     _interpolate_bsfc,
     _calc_l100_raw,
     _BSFC_RPM_GRID,
     _BSFC_LOAD_GRID,
+    calc_fuel_table,
 )
 from wltc import (
     get_wltc_profile,
@@ -640,3 +647,125 @@ class TestStepSteerSimulation:
         history = simulate_step_steer(lat_sedan, 60, 3, duration_s=1)
         _, _, r0, _, _ = history[0]
         assert r0 == 0
+
+
+# ---- 高层封装函数冒烟测试 ----
+
+class TestPowerBreakdown:
+    """calc_power_breakdown — 返回结构化 dict"""
+
+    def test_returns_required_keys(self, sedan):
+        data = calc_power_breakdown(sedan, speed_kmh=100, grade_percent=5)
+        for key in ["engine_max_power_w", "rolling_power_const_w", "rolling_power_dyn_w",
+                     "aero_power_w", "grade_power_w", "power_utilization_pct"]:
+            assert key in data
+
+    def test_power_utilization_in_range(self, sedan):
+        data = calc_power_breakdown(sedan, speed_kmh=100, grade_percent=5)
+        assert 0 < data["power_utilization_pct"] < 100
+
+    def test_dynamic_rr_different_from_constant(self, sedan):
+        data = calc_power_breakdown(sedan, speed_kmh=120, grade_percent=0)
+        assert data["rolling_power_dyn_w"] != pytest.approx(data["rolling_power_const_w"], abs=1)
+
+
+class TestBrakingTable:
+    """calc_braking_table — 返回 list[dict]"""
+
+    def test_returns_correct_length(self):
+        table = calc_braking_table()
+        assert len(table) == 6
+
+    def test_each_row_has_required_keys(self):
+        for row in calc_braking_table():
+            for key in ["speed_kmh", "reaction_dist_m", "braking_dist_m", "total_dist_m"]:
+                assert key in row
+
+    def test_higher_speed_longer_total(self):
+        table = calc_braking_table()
+        for i in range(len(table) - 1):
+            assert table[i + 1]["total_dist_m"] > table[i]["total_dist_m"]
+
+
+class TestSimulateAcceleration:
+    """simulate_acceleration — 返回结构化 dict"""
+
+    def test_returns_required_keys(self, sedan):
+        data = simulate_acceleration(sedan, target_speed_kmh=100)
+        for key in ["time", "speed_kmh", "acc_ms2", "distance_m", "elapsed_s", "total_dist_m"]:
+            assert key in data
+
+    def test_speed_increases_monotonically(self, sedan):
+        data = simulate_acceleration(sedan, target_speed_kmh=60)
+        speeds = data["speed_kmh"]
+        for i in range(len(speeds) - 1):
+            assert speeds[i + 1] >= speeds[i]
+
+    def test_final_speed_reaches_target(self, sedan):
+        data = simulate_acceleration(sedan, target_speed_kmh=60)
+        assert data["speed_kmh"][-1] >= 60
+
+
+class TestAnalyzeLateral:
+    """analyze_lateral — 横向动力学综合分析"""
+
+    def test_returns_required_keys(self, lat_sedan):
+        data = analyze_lateral(lat_sedan)
+        for key in ["wheelbase_m", "kus_deg_per_g", "steer_type",
+                     "characteristic_speed_kmh", "critical_speed_kmh"]:
+            assert key in data
+
+    def test_sedan_is_understeer(self, lat_sedan):
+        data = analyze_lateral(lat_sedan)
+        assert "不足转向" in data["steer_type"]
+
+    def test_oversteer_car_is_oversteer(self, lat_oversteer):
+        data = analyze_lateral(lat_oversteer)
+        assert "过度转向" in data["steer_type"]
+
+
+class TestSteadyCorneringTable:
+    """calc_steady_cornering_table — 返回 list[dict]"""
+
+    def test_returns_non_empty(self, lat_sedan):
+        table = calc_steady_cornering_table(lat_sedan)
+        assert len(table) == 5
+
+    def test_higher_speed_larger_radius(self, lat_sedan):
+        table = calc_steady_cornering_table(lat_sedan)
+        for i in range(len(table) - 1):
+            assert table[i + 1]["turn_radius_m"] > table[i]["turn_radius_m"]
+
+
+class TestStepSteerResponse:
+    """calc_step_steer_response — 返回结构化 dict"""
+
+    def test_returns_required_keys(self, lat_sedan):
+        data = calc_step_steer_response(lat_sedan, vx_kmh=80, steer_deg=3)
+        for key in ["history", "steady_yaw_rate", "steady_lateral_acc",
+                     "final_yaw_rate", "final_lateral_acc"]:
+            assert key in data
+
+    def test_final_near_steady(self, lat_sedan):
+        data = calc_step_steer_response(lat_sedan, vx_kmh=80, steer_deg=3)
+        assert data["final_yaw_rate"] == pytest.approx(data["steady_yaw_rate"], rel=0.05)
+
+
+class TestFuelTable:
+    """calc_fuel_table — 返回 list[dict]"""
+
+    def test_returns_non_empty(self):
+        table = calc_fuel_table()
+        assert len(table) == 3 * 7  # 3 cars x 7 speeds
+
+    def test_each_row_has_required_keys(self):
+        for row in calc_fuel_table():
+            for key in ["car_name", "speed_kmh", "gear", "rpm", "load_pct",
+                         "bsfc_gkwh", "l100km"]:
+                assert key in row
+
+    def test_truck_higher_consumption_than_sedan(self):
+        table = calc_fuel_table()
+        sedan_90 = next(r for r in table if r["car_name"] == "普通轿车" and r["speed_kmh"] == 90)
+        truck_70 = next(r for r in table if r["car_name"] == "重型卡车" and r["speed_kmh"] == 70)
+        assert truck_70["l100km"] > sedan_90["l100km"]

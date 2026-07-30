@@ -15,7 +15,7 @@ jobs:
           python-version: "3.10"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install .[test]
 
       - name: Run all tests
         run: python -m pytest test_vehicle_dynamics.py test_can_demo.py -v

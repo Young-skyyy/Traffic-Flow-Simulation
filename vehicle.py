@@ -54,7 +54,7 @@ class Vehicle:
         self.wheelbase: float = wheelbase_m or 2.65          # 轴距（m），典型轿车
         self.cg_to_front: float = cg_to_front_m or self.wheelbase * 0.45  # 质心到前轴距离（m）
         self.cg_to_rear: float = self.wheelbase - self.cg_to_front         # 质心到后轴距离（m）
-        # 侧偏刚度（N/rad），典型值：前轮 -80000，后轮 -70000（负号表示侧向力与侧偏角反向）
+        # 侧偏刚度 magnitude（N/rad），存储正值。侧向力公式 Fy = -Cα × α，负号在 calc_cornering_forces 中体现
         self.cornering_stiffness_f: float = cornering_stiffness_f or 80000
         self.cornering_stiffness_r: float = cornering_stiffness_r or 70000
         # 横摆转动惯量（kg·m²），估算公式 Iz ≈ m × a × b
