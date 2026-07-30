@@ -539,3 +539,13 @@ if __name__ == "__main__":
     else:
         for d in dtc_result["details"]:
             print(f"    {d['code']} | {d['ecu']} | {d['desc']}")
+
+    # 场景 3：UDS 诊断会话演示
+    from uds import ECUDiagnosticServer, diagnostic_session_demo
+    ems_server = ECUDiagnosticServer("EMS", {
+        0x000C: 2500.0,   # 发动机转速
+        0x000D: 60.0,     # 车速
+        0x0005: 90.0,     # 冷却液温度
+        0x0011: 35.0,     # 节气门位置
+    })
+    diagnostic_session_demo(ems_server)
