@@ -17,5 +17,5 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run vehicle dynamics tests
-        run: python -m pytest test_vehicle_dynamics.py -v
+      - name: Run all tests
+        run: python -m pytest test_vehicle_dynamics.py test_can_demo.py -v
